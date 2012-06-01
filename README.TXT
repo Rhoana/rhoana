@@ -34,3 +34,8 @@ Strategies for joining multiple segmentation results, in 2D or in 3D, over a sin
 Viewers
 -------
 Tools and software for viewing volumes or results at any stage of the pipeline.
+
+
+Evaluation
+----------
+Different evaluation metrics to access the quality of the reconstruction.
