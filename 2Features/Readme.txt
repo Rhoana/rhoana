@@ -1,0 +1,2 @@
+Anything in this folder should take a stack of tif or png images as input and output feature data for each image in .mat or .hdf5 format.
+Output should be exactly the same size as input. Output can include a blank halo if required.
