@@ -1,0 +1,94 @@
+	.version 1.4
+	.target sm_10, map_f64_to_f32
+	// compiled with C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v4.0\bin\/../open64/lib//be.exe
+	// nvopencc 4.0 built on 2011-05-13
+
+	//-----------------------------------------------------------
+	// Compiling C:/Users/Cmor/AppData/Local/Temp/tmpxft_00000c50_00000000-11_add.cpp3.i (C:/Users/Cmor/AppData/Local/Temp/ccBI#.a03012)
+	//-----------------------------------------------------------
+
+	//-----------------------------------------------------------
+	// Options:
+	//-----------------------------------------------------------
+	//  Target:ptx, ISA:sm_10, Endian:little, Pointer Size:64
+	//  -O3	(Optimization level)
+	//  -g0	(Debug level)
+	//  -m2	(Report advisories)
+	//-----------------------------------------------------------
+
+	.file	1	"C:/Users/Cmor/AppData/Local/Temp/tmpxft_00000c50_00000000-10_add.cudafe2.gpu"
+	.file	2	"c:\program files (x86)\microsoft visual studio 10.0\vc\include\codeanalysis\sourceannotations.h"
+	.file	3	"C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v4.0\bin\/../include\crt/device_runtime.h"
+	.file	4	"C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v4.0\bin\/../include\host_defines.h"
+	.file	5	"C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v4.0\bin\/../include\builtin_types.h"
+	.file	6	"c:\program files\nvidia gpu computing toolkit\cuda\v4.0\include\device_types.h"
+	.file	7	"c:\program files\nvidia gpu computing toolkit\cuda\v4.0\include\driver_types.h"
+	.file	8	"c:\program files\nvidia gpu computing toolkit\cuda\v4.0\include\surface_types.h"
+	.file	9	"c:\program files\nvidia gpu computing toolkit\cuda\v4.0\include\texture_types.h"
+	.file	10	"c:\program files\nvidia gpu computing toolkit\cuda\v4.0\include\vector_types.h"
+	.file	11	"c:\program files\nvidia gpu computing toolkit\cuda\v4.0\include\builtin_types.h"
+	.file	12	"c:\program files\nvidia gpu computing toolkit\cuda\v4.0\include\host_defines.h"
+	.file	13	"C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v4.0\bin\/../include\device_launch_parameters.h"
+	.file	14	"c:\program files\nvidia gpu computing toolkit\cuda\v4.0\include\crt\storage_class.h"
+	.file	15	"C:\Program Files (x86)\Microsoft Visual Studio 10.0\VC\bin/../../VC/INCLUDE\time.h"
+	.file	16	"add.cu"
+	.file	17	"C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v4.0\bin\/../include\common_functions.h"
+	.file	18	"c:\program files\nvidia gpu computing toolkit\cuda\v4.0\include\math_functions.h"
+	.file	19	"c:\program files\nvidia gpu computing toolkit\cuda\v4.0\include\math_constants.h"
+	.file	20	"c:\program files\nvidia gpu computing toolkit\cuda\v4.0\include\device_functions.h"
+	.file	21	"c:\program files\nvidia gpu computing toolkit\cuda\v4.0\include\sm_11_atomic_functions.h"
+	.file	22	"c:\program files\nvidia gpu computing toolkit\cuda\v4.0\include\sm_12_atomic_functions.h"
+	.file	23	"c:\program files\nvidia gpu computing toolkit\cuda\v4.0\include\sm_13_double_functions.h"
+	.file	24	"c:\program files\nvidia gpu computing toolkit\cuda\v4.0\include\sm_20_atomic_functions.h"
+	.file	25	"c:\program files\nvidia gpu computing toolkit\cuda\v4.0\include\sm_20_intrinsics.h"
+	.file	26	"c:\program files\nvidia gpu computing toolkit\cuda\v4.0\include\surface_functions.h"
+	.file	27	"c:\program files\nvidia gpu computing toolkit\cuda\v4.0\include\texture_fetch_functions.h"
+	.file	28	"c:\program files\nvidia gpu computing toolkit\cuda\v4.0\include\math_functions_dbl_ptx1.h"
+
+
+	.entry _Z3addPdPKdi (
+		.param .u64 __cudaparm__Z3addPdPKdi_v1,
+		.param .u64 __cudaparm__Z3addPdPKdi_v2,
+		.param .s32 __cudaparm__Z3addPdPKdi_chunksize)
+	{
+	.reg .u32 %r<10>;
+	.reg .u64 %rd<8>;
+	.reg .f64 %fd<5>;
+	.reg .pred %p<4>;
+	.loc	16	1	0
+$LDWbegin__Z3addPdPKdi:
+	.loc	16	6	0
+	ld.param.s32 	%r1, [__cudaparm__Z3addPdPKdi_chunksize];
+	cvt.u32.u16 	%r2, %tid.x;
+	mul.lo.u32 	%r3, %r1, %r2;
+	mov.s32 	%r4, %r3;
+	add.u32 	%r5, %r2, 1;
+	mul.lo.u32 	%r6, %r1, %r5;
+	setp.le.s32 	%p1, %r6, %r3;
+	@%p1 bra 	$Lt_0_1282;
+	sub.s32 	%r7, %r6, %r3;
+	cvt.s64.s32 	%rd1, %r3;
+	mul.wide.s32 	%rd2, %r3, 8;
+	ld.param.u64 	%rd3, [__cudaparm__Z3addPdPKdi_v1];
+	add.u64 	%rd4, %rd3, %rd2;
+	ld.param.u64 	%rd5, [__cudaparm__Z3addPdPKdi_v2];
+	add.u64 	%rd6, %rd5, %rd2;
+	mov.s32 	%r8, %r7;
+$Lt_0_1794:
+ //<loop> Loop body line 6, nesting depth: 1, estimated iterations: unknown
+	.loc	16	7	0
+	ld.global.f64 	%fd1, [%rd4+0];
+	ld.global.f64 	%fd2, [%rd6+0];
+	add.f64 	%fd3, %fd1, %fd2;
+	st.global.f64 	[%rd4+0], %fd3;
+	add.s32 	%r4, %r4, 1;
+	add.u64 	%rd6, %rd6, 8;
+	add.u64 	%rd4, %rd4, 8;
+	setp.ne.s32 	%p2, %r4, %r6;
+	@%p2 bra 	$Lt_0_1794;
+$Lt_0_1282:
+	.loc	16	9	0
+	exit;
+$LDWend__Z3addPdPKdi:
+	} // _Z3addPdPKdi
+

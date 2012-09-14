@@ -1,0 +1,16 @@
+*.mex*
+*.o
+*~
+.DS_Store
+doc/*.log
+doc/*.out
+doc/*.blg
+doc/*.toc
+doc/*.aux
+doc/*.pdf
+doc/index.html
+doc/default.css
+TIMESTAMP
+VERSION
+sift-*.tar.gz
+

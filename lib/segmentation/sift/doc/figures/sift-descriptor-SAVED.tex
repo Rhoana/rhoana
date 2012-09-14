@@ -1,0 +1,68 @@
+%&pdflatex
+\documentclass[10pt]{article}%%%%%%%%%%%%% PACKAGES %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% To use Lucida, uncomment the three  %% lines below and comment out amssymb %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% %\usepackage[LY1]{fontenc}%\usepackage[expert,altbullet,lucidasmallscale]{lucidabr}\usepackage{amsmath}\usepackage{amssymb}%\usepackage{bm}\usepackage{amsthm}\usepackage{exscale}\usepackage{mathrsfs}\usepackage{ifthen}\usepackage[pdftex]{graphicx}\usepackage[dvipsnames,usenames]{color}%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% Define the font size you want to use for your labels.% For example, we like to use \small, so that we would use% \newcommand{\fontlabelsizeswitch}{\small}\newcommand{\fontlabelsizeswitch}{}% Settings for FC and GLG books.%\usepackage[nosepfour,np,warning,autolanguage]{numprint}%\input{../../../../../Settings/commands}% Common settings used by GLG and FC.%\input{GLG-FC-macros}%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% The length \whiteborder defines  %% the amount of white space around %% your image.                      %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%\newlength{\whiteborder}           %\setlength{\whiteborder}{1pt}      %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% EXOTIC PACKAGES:  Figure Labeling within LaTeX %
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\usepackage[all,color,frame,import]{xy}          %
+\usepackage{warmread}                            %
+\let\xyWARMprocess\xyWARMprocessMo               %
+\let\WARMprocessEPS\WARMprocessMoEPS             %
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% ****      USEFUL WARMreader COMMANDS      **** %
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%\xyMarkedPos{MONumber}*!D( 0.00)!L( 0.00)
+%\txt{NewText}
+%\xyMarkedPos{MONumber}*!D( 0.00)!L( 0.00)
+%\txt{\rotatebox{90}{yAxis-Title}}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% Set up for cropping PDF %
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\setlength{\fboxsep}{\whiteborder} %
+\setlength{\fboxrule}{0pt}         %
+\newsavebox{\shipoutbox}           %
+\newcommand{\FCGLGExport}{%        %
+\setbox0=%                         %
+\vbox{\kern-1truein%               %
+\hbox{%                            %
+\kern-1truein%                     %
+\framebox{\usebox{\shipoutbox}}%   %
+\kern1truein}%                     %
+\kern1truein}%                     %
+\pdfpageheight\ht0%                %
+\pdfpagewidth\wd0%                 %
+\shipout\box0}                     %
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\begin{document}
+\thispagestyle{empty}
+\renewcommand{\xyWARMinclude}[1]{\includegraphics[viewport=52.600098 691.715820 291.716797 802.043945]{#1}}
+
+\WARMprocessEPS{sift-descriptor-AI}{pdf}{bb}
+%
+\savebox{\shipoutbox}{%
+\begin{xy}
+\xyMarkedImport{}
+
+\fontlabelsizeswitch
+
+% MarkedPoint:(118,46) : point(0,0) : 2 %$x_1$
+\xyMarkedTextPoints!D( 0.00)!L( 0.00){1}
+
+% MarkedPoint:(55,109) : point(0,0) : 3 %$x_2$
+\xyMarkedTextPoints!D( 0.00)!L( 0.00){2}
+
+% MarkedPoint:(-16,46) : point(0,0) : 4 %$N_p$
+\xyMarkedTextPoints!D( 0.00)!L( 0.00){3}
+
+% MarkedPoint:(180,1) : point(0,0) : 12 %$m\sigma$
+\xyMarkedTextPoints!D( 0.00)!L( 0.00){4}
+
+
+\end{xy}}
+\FCGLGExport
+%
+
+\end{document}

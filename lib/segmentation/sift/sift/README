@@ -1,0 +1,73 @@
+                         AN IMPLEMENTATION OF
+               LOWE'S SCALE INVARIANT FEATURE TRANSFORM
+
+                            Andrea Vedaldi
+                         vedaldi@cs.ucla.edu
+                   http://www.cs.ucla.edu/~vedaldi/
+
+This is a MATLAB/C implementation of the SIFT detector and descriptor
+[1]. See the documentation in 'doc/' to get started.
+
+COMPLING
+  From MATLAB prompt
+  > sift_compile
+  From shell prompt (Linux, Mac OS X)
+  > make
+
+TRYING OUT THE CODE
+  The package includes a number of test function called sift_demo*.m.
+
+ABOUT THE SOURCE CODE
+  We use the follwing convention to name files:
+  *.m *.c:       M and MEX files
+  sift*mx.c:     `Private' MEX files
+  sift_*.m:      Service scripts (compiling, demos)
+
+CHANGES
+  0.9.19  Adds support for maci64 platforms to sift_compile.m.
+          Fixes an issue causing keypoints to be plotted one pixels off.
+  0.9.18  Adds support for 64 bit platforms to sift_compile.m
+          Fixes whitespaces.
+  0.9.17  Fixed a bug for which the VERSION file was not updated correctly.
+          Compiles with Visual C 2005.
+  0.9.16  Fixed a bug causing an infinite loop in siftdescriptors under
+          Windows with LCC and null gradients in the descriptor.
+  0.9.15  Untabified sources. Fixed typo in notes.
+  0.9.14  Fixed issues in sift_compile.m on Mac Intel platforms.
+  0.9.13  Improved make dist.
+  0.9.12  Removed LAPACK call. Added LOWE_BUG symbol definition to
+          reproduce a small issue with Lowe's implementation in the
+          computation of the keypoint orientations and match its
+          output more closely.
+  0.9.11  Corrected a bug which prevented Magnif to function properly.
+          Removed a spurious KEYBOARD command.
+  0.9.10  Added sift_demo6.m.
+  0.9.9   Added a flag to compile on Intel Macs.
+          Improved the documentation.
+  0.9.8   Minor bug fixes
+  0.9.7   Fixed a minor glitch in the convolution code. Increased the
+          default number of octaves that get computed (this is more
+          similar to Lowe's version).
+  0.9.6   Modified the convolution code to handle image boundaries more
+          similarly to Lowe's version.
+  0.9.5   Fixed a minor issues with the new sift_demo3.m.
+  0.9.4   Fixed another bug in the detection of keypoints close to
+          the boundary. Reduced the size of the distribution. New test code.
+  0.9.3   Improved plotmatches.m and tightsubplot.m
+  0.9.2   Improved detection of keypoints too close to the boundary
+  0.9.1   Fixed a bug in the creation of the .zip archive
+  0.9     Fixed a bug for which some of the keypoint detected where
+          dropped.
+
+CREDITS
+  The SIFT algorithm [1] has been patented by David Lowe. Some of the
+  images in 'data/' are from [2,3].
+
+[1] D. G. Lowe, "Distinctive image features from scale-invariant
+    keypoints," IJCV, vol. 2, no. 60, pp. 91 110, 2004.
+
+[2] K. Mikolajczyk, T. Tuytelaars, C. Schmid, A. Zisserman, J. Matas,
+    F. Schaffalitzky, T. Kadir, and L. Van Gool, "A comparison of affine
+    region detectors," IJCV, vol. 1, no. 60, pp. 63 86, 2004.
+
+[3] C. Hormann, "Landscape of the week 2," 2006.

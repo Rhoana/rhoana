@@ -1,0 +1,171 @@
+	.version 1.4
+	.target sm_10, map_f64_to_f32
+	// compiled with C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v4.0\bin\/../open64/lib//be.exe
+	// nvopencc 4.0 built on 2011-05-13
+
+	//-----------------------------------------------------------
+	// Compiling C:/Users/Cmor/AppData/Local/Temp/tmpxft_00000a3c_00000000-11_catUnpack.cpp3.i (C:/Users/Cmor/AppData/Local/Temp/ccBI#.a03264)
+	//-----------------------------------------------------------
+
+	//-----------------------------------------------------------
+	// Options:
+	//-----------------------------------------------------------
+	//  Target:ptx, ISA:sm_10, Endian:little, Pointer Size:64
+	//  -O3	(Optimization level)
+	//  -g0	(Debug level)
+	//  -m2	(Report advisories)
+	//-----------------------------------------------------------
+
+	.file	1	"C:/Users/Cmor/AppData/Local/Temp/tmpxft_00000a3c_00000000-10_catUnpack.cudafe2.gpu"
+	.file	2	"c:\program files (x86)\microsoft visual studio 10.0\vc\include\codeanalysis\sourceannotations.h"
+	.file	3	"C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v4.0\bin\/../include\crt/device_runtime.h"
+	.file	4	"C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v4.0\bin\/../include\host_defines.h"
+	.file	5	"C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v4.0\bin\/../include\builtin_types.h"
+	.file	6	"c:\program files\nvidia gpu computing toolkit\cuda\v4.0\include\device_types.h"
+	.file	7	"c:\program files\nvidia gpu computing toolkit\cuda\v4.0\include\driver_types.h"
+	.file	8	"c:\program files\nvidia gpu computing toolkit\cuda\v4.0\include\surface_types.h"
+	.file	9	"c:\program files\nvidia gpu computing toolkit\cuda\v4.0\include\texture_types.h"
+	.file	10	"c:\program files\nvidia gpu computing toolkit\cuda\v4.0\include\vector_types.h"
+	.file	11	"c:\program files\nvidia gpu computing toolkit\cuda\v4.0\include\builtin_types.h"
+	.file	12	"c:\program files\nvidia gpu computing toolkit\cuda\v4.0\include\host_defines.h"
+	.file	13	"C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v4.0\bin\/../include\device_launch_parameters.h"
+	.file	14	"c:\program files\nvidia gpu computing toolkit\cuda\v4.0\include\crt\storage_class.h"
+	.file	15	"C:\Program Files (x86)\Microsoft Visual Studio 10.0\VC\bin/../../VC/INCLUDE\time.h"
+	.file	16	"catUnpack.cu"
+	.file	17	"C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v4.0\bin\/../include\common_functions.h"
+	.file	18	"c:\program files\nvidia gpu computing toolkit\cuda\v4.0\include\math_functions.h"
+	.file	19	"c:\program files\nvidia gpu computing toolkit\cuda\v4.0\include\math_constants.h"
+	.file	20	"c:\program files\nvidia gpu computing toolkit\cuda\v4.0\include\device_functions.h"
+	.file	21	"c:\program files\nvidia gpu computing toolkit\cuda\v4.0\include\sm_11_atomic_functions.h"
+	.file	22	"c:\program files\nvidia gpu computing toolkit\cuda\v4.0\include\sm_12_atomic_functions.h"
+	.file	23	"c:\program files\nvidia gpu computing toolkit\cuda\v4.0\include\sm_13_double_functions.h"
+	.file	24	"c:\program files\nvidia gpu computing toolkit\cuda\v4.0\include\sm_20_atomic_functions.h"
+	.file	25	"c:\program files\nvidia gpu computing toolkit\cuda\v4.0\include\sm_20_intrinsics.h"
+	.file	26	"c:\program files\nvidia gpu computing toolkit\cuda\v4.0\include\surface_functions.h"
+	.file	27	"c:\program files\nvidia gpu computing toolkit\cuda\v4.0\include\texture_fetch_functions.h"
+	.file	28	"c:\program files\nvidia gpu computing toolkit\cuda\v4.0\include\math_functions_dbl_ptx1.h"
+
+
+	.entry _Z9catUnpackPiPfS_S_iS_i (
+		.param .u64 __cudaparm__Z9catUnpackPiPfS_S_iS_i_nodestatus,
+		.param .u64 __cudaparm__Z9catUnpackPiPfS_S_iS_i_xbestsplit,
+		.param .u64 __cudaparm__Z9catUnpackPiPfS_S_iS_i_bestvar,
+		.param .u64 __cudaparm__Z9catUnpackPiPfS_S_iS_i_cat,
+		.param .s32 __cudaparm__Z9catUnpackPiPfS_S_iS_i_maxcat,
+		.param .u64 __cudaparm__Z9catUnpackPiPfS_S_iS_i_cbestsplit,
+		.param .s32 __cudaparm__Z9catUnpackPiPfS_S_iS_i_maxTreeSize)
+	{
+	.reg .u32 %r<27>;
+	.reg .u64 %rd<22>;
+	.reg .f32 %f<3>;
+	.reg .pred %p<11>;
+	.loc	16	6	0
+$LDWbegin__Z9catUnpackPiPfS_S_iS_i:
+	ld.param.s32 	%r1, [__cudaparm__Z9catUnpackPiPfS_S_iS_i_maxcat];
+	mov.u32 	%r2, 1;
+	setp.le.s32 	%p1, %r1, %r2;
+	@%p1 bra 	$Lt_0_5634;
+	.loc	16	16	0
+	ld.param.s32 	%r3, [__cudaparm__Z9catUnpackPiPfS_S_iS_i_maxTreeSize];
+	cvt.s32.u16 	%r4, %tid.x;
+	mul.lo.s32 	%r5, %r4, %r3;
+	mov.s32 	%r6, %r5;
+	add.s32 	%r7, %r5, %r3;
+	setp.le.s32 	%p2, %r7, %r5;
+	@%p2 bra 	$Lt_0_6146;
+	ld.param.s32 	%r3, [__cudaparm__Z9catUnpackPiPfS_S_iS_i_maxTreeSize];
+	mov.s32 	%r8, %r3;
+	mov.s32 	%r9, 0;
+	.loc	16	6	0
+	ld.param.s32 	%r1, [__cudaparm__Z9catUnpackPiPfS_S_iS_i_maxcat];
+	.loc	16	16	0
+	setp.gt.s32 	%p3, %r1, %r9;
+	cvt.s64.s32 	%rd1, %r5;
+	mov.s64 	%rd2, %rd1;
+	mul.wide.s32 	%rd3, %r5, 4;
+	ld.param.u64 	%rd4, [__cudaparm__Z9catUnpackPiPfS_S_iS_i_nodestatus];
+	mov.s32 	%r10, %r8;
+$Lt_0_6658:
+ //<loop> Loop body line 16, nesting depth: 1, estimated iterations: unknown
+	@!%p3 bra 	$Lt_0_6914;
+	.loc	16	6	0
+	ld.param.s32 	%r1, [__cudaparm__Z9catUnpackPiPfS_S_iS_i_maxcat];
+	.loc	16	16	0
+	mov.s32 	%r11, %r1;
+	mov.s32 	%r12, %r6;
+	add.s32 	%r13, %r6, %r1;
+	ld.param.u64 	%rd5, [__cudaparm__Z9catUnpackPiPfS_S_iS_i_cbestsplit];
+	mul.lo.u64 	%rd6, %rd2, 4;
+	add.u64 	%rd7, %rd5, %rd6;
+	mov.s32 	%r14, %r11;
+$Lt_0_7426:
+ //<loop> Loop body line 16, nesting depth: 2, estimated iterations: unknown
+	.loc	16	19	0
+	mov.s32 	%r15, 0;
+	st.global.s32 	[%rd7+0], %r15;
+	add.s32 	%r12, %r12, 1;
+	add.u64 	%rd7, %rd7, 4;
+	setp.ne.s32 	%p4, %r12, %r13;
+	@%p4 bra 	$Lt_0_7426;
+$Lt_0_6914:
+	.loc	16	16	0
+	ld.param.u64 	%rd4, [__cudaparm__Z9catUnpackPiPfS_S_iS_i_nodestatus];
+	.loc	16	19	0
+	add.u64 	%rd8, %rd3, %rd4;
+	ld.global.s32 	%r16, [%rd8+0];
+	mov.u32 	%r17, -1;
+	setp.eq.s32 	%p5, %r16, %r17;
+	@%p5 bra 	$Lt_0_7938;
+	ld.param.u64 	%rd9, [__cudaparm__Z9catUnpackPiPfS_S_iS_i_cat];
+	ld.param.u64 	%rd10, [__cudaparm__Z9catUnpackPiPfS_S_iS_i_bestvar];
+	add.u64 	%rd11, %rd10, %rd3;
+	ld.global.s32 	%r18, [%rd11+0];
+	cvt.s64.s32 	%rd12, %r18;
+	mul.wide.s32 	%rd13, %r18, 4;
+	add.u64 	%rd14, %rd9, %rd13;
+	ld.global.s32 	%r19, [%rd14+-4];
+	mov.u32 	%r20, 1;
+	setp.le.s32 	%p6, %r19, %r20;
+	@%p6 bra 	$Lt_0_8450;
+	.loc	16	25	0
+	ld.param.u64 	%rd15, [__cudaparm__Z9catUnpackPiPfS_S_iS_i_xbestsplit];
+	add.u64 	%rd16, %rd15, %rd3;
+	ld.global.f32 	%f1, [%rd16+0];
+	cvt.rzi.u32.f32 	%r21, %f1;
+	mov.u32 	%r22, 0;
+	setp.eq.u32 	%p7, %r21, %r22;
+	@%p7 bra 	$Lt_0_8962;
+	ld.param.u64 	%rd17, [__cudaparm__Z9catUnpackPiPfS_S_iS_i_cbestsplit];
+	.loc	16	6	0
+	ld.param.s32 	%r1, [__cudaparm__Z9catUnpackPiPfS_S_iS_i_maxcat];
+	.loc	16	25	0
+	mul.lo.s32 	%r23, %r6, %r1;
+	cvt.s64.s32 	%rd18, %r23;
+	mul.wide.s32 	%rd19, %r23, 4;
+	add.u64 	%rd20, %rd17, %rd19;
+$Lt_0_9474:
+ //<loop> Loop body line 25, nesting depth: 2, estimated iterations: unknown
+	.loc	16	28	0
+	and.b32 	%r24, %r21, 1;
+	st.global.s32 	[%rd20+0], %r24;
+	.loc	16	27	0
+	shr.u32 	%r21, %r21, 1;
+	add.u64 	%rd20, %rd20, 4;
+	mov.u32 	%r25, 0;
+	setp.ne.u32 	%p8, %r21, %r25;
+	@%p8 bra 	$Lt_0_9474;
+$Lt_0_8962:
+$Lt_0_8450:
+$Lt_0_7938:
+	add.s32 	%r6, %r6, 1;
+	add.s64 	%rd2, %rd2, 1;
+	add.u64 	%rd3, %rd3, 4;
+	setp.ne.s32 	%p9, %r7, %r6;
+	@%p9 bra 	$Lt_0_6658;
+$Lt_0_6146:
+$Lt_0_5634:
+	.loc	16	34	0
+	exit;
+$LDWend__Z9catUnpackPiPfS_S_iS_i:
+	} // _Z9catUnpackPiPfS_S_iS_i
+

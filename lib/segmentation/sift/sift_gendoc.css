@@ -1,0 +1,159 @@
+/** file:        default.css
+ ** author:      Andrea Vedaldi
+ ** description: Default CSS sylesheet for SIFT_GENDOC.PL
+ **/
+
+/* AUTORIGHTS */
+
+h1
+{
+  color: #3a3a3a ;
+}
+
+pre
+{
+  font-family: monaco, courier, monospace ;
+  font-size: 14px ;
+  color: #3a3a3a ;
+}
+
+body
+{
+  margin: 10px ;
+  padding: 1em ;
+  right: 0px ;
+  font-family: arial, sans-serif ;
+
+  color: black ;
+  background-color: #fffffa ; 
+}
+
+/* ------------------------------------------------------------------
+ *                                                             Module
+ * --------------------------------------------------------------- */
+
+div.module
+{
+  margin-bottom: 1em ;
+  //background-color: #ffffff ;
+}
+
+div.module h1
+{
+  margin: 0px ;
+  margin-bottom: 0.5em ;
+  padding: 0px ;
+  font-size: 1.5em ;
+  border-bottom: 2px #3a3a3a solid ;
+}
+
+div.module pre
+{
+  padding-left: 1em ;
+}
+
+div.module div.footer
+{
+  clear: both ;
+}
+
+div.module div.footer :link
+{
+  color: white ;
+  text-decoration: none ;
+}
+
+/* ------------------------------------------------------------------
+ *                                                       Module index
+ * --------------------------------------------------------------- */
+
+div.module div.index
+{
+  font-family: sans-serif ;
+  font-size: 0.8em ;
+
+  width: 15em ;
+  float: right ;
+  border: 1px #ccc0c0 solid ;
+  background-color: #fcf0f0 ;
+}
+
+div.module div.index h1
+{
+  font-size: 1em ;  
+  font-weight: bold ;
+  text-align: center ;
+  border: none ;
+  padding: 0 ;
+  margin: 0 ;
+}
+
+div.module div.index ul
+{
+  list-style-type: square ;
+  list-style-position: inside ;
+  color: #3a3a3a ;
+  padding: 0 ;
+  margin: 0 ;
+  padding: 0.3em ;
+}
+
+div.module div.index ul li
+{
+  margin-bottom: 0.1em ;
+}
+
+
+/* ------------------------------------------------------------------
+ *                                                              Mfile
+ * --------------------------------------------------------------- */
+
+div.mfile
+{
+  background-color: white ;
+  margin-bottom: 1em ;
+  border: 1px #aaaaaa solid ;
+}
+
+div.mfile h1
+{
+  margin: 0 ;
+  padding: 0 ;
+  padding-left: 10px ;
+  font-size: 1.3em ;  
+  background-color: #f0f0ff ;
+}
+
+div.mfile h1 span.name
+{
+  font-family: monaco, courier, fixed ;
+}
+
+div.mfile h1 span.brief
+{
+  padding-left: 10px ; 
+  font-size: 0.9em ;
+  font-weight: normal ;  
+}
+
+div.mfile pre
+{
+  padding-left: 1em ;
+}
+
+div.mfile div.footer
+{
+  font-size: 0.8em ;
+  padding: 0.3em ;
+}
+
+div.mfile div.footer a
+{
+  text-decoration: none ;
+  color: #777777 ;
+}
+
+div.mfile div.footer a:hover
+{
+  text-decoration: underline ;
+}

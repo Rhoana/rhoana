@@ -1,0 +1,189 @@
+\NeedsTeXFormat{LaTeX2e}[95/06/01]
+\ProvidesPackage{visionlab}[2004/05/07 UCLA Vision Lab]
+% by Andrea Vedaldi
+
+\RequirePackage{amsthm}
+\RequirePackage{amsmath}
+\RequirePackage{amssymb}
+\RequirePackage{xspace}
+
+% ------------------------------------------------------------------------------
+%                                                            Process the options 
+% ------------------------------------------------------------------------------ 
+
+\def\VL@thmhead{Theorem}
+\def\VL@prphead{Proposition}
+\def\VL@corhead{Corollary}
+\def\VL@defhead{Definition}
+\def\VL@lemhead{Lemma}
+
+\DeclareOption{compact}{
+\def\VL@thmhead{Thm.}
+\def\VL@prphead{Prop.}
+\def\VL@corhead{Cor.}
+\def\VL@defhead{Def.}
+\def\VL@lemhead{Lemmma}
+}
+
+\ExecuteOptions{}
+\ProcessOptions*
+ 
+% ------------------------------------------------------------------------------
+%                                                            Useful environments
+% ------------------------------------------------------------------------------ 
+\theoremstyle{plain}
+\newtheorem{theorem}{\VL@thmhead~}
+\newtheorem{proposition}{\VL@prphead~}
+\newtheorem{lemma}{\VL@lemhead~}
+\newtheorem{corollary}{\VL@corhead~}
+
+\theoremstyle{definition}
+\newtheorem{definition}{\VL@defhead~}
+
+\theoremstyle{remark}
+\newtheorem{example}{Example}
+\newtheorem{remark}{Remark}
+\newtheorem{problem}{Problem}
+\newtheorem{exercise}{Exercise}
+
+% ------------------------------------------------------------------------------
+%                                                               Useful shortcuts
+% ------------------------------------------------------------------------------ 
+
+% Sets
+\newcommand{\real}{\ensuremath{\mathbb{R}}}
+\newcommand{\naturalnumber}{\ensuremath{\mathbb{N}}}
+\newcommand{\complex}{\ensuremath{\mathbb{C}}}
+\newcommand{\rational}{\ensuremath{\mathbb{Q}}}
+\newcommand{\integer}{\ensuremath{\mathbb{Z}}}
+\newcommand{\boolean}{\ensuremath{\mathbb{B}}}
+\newcommand{\sphere}{\ensuremath{\mathbb{S}}}
+
+% Units
+\newcommand{\ster}{\ensuremath{\operatorname{ster}}}
+
+% Operators
+\newcommand{\support}{\ensuremath{\operatorname{supp}}}
+\newcommand{\card}{\ensuremath{\operatorname{card}}}
+\newcommand{\tr}{\ensuremath{\operatorname{tr}}}
+\newcommand{\diag}{\ensuremath{\operatorname{diag}}}
+\newcommand{\adj}{\ensuremath{\operatorname{adj}}}
+\newcommand{\argmax}{\ensuremath{\operatornamewithlimits{argmax}}}
+\newcommand{\argmin}{\ensuremath{\operatornamewithlimits{argmin}}}
+\newcommand{\kernel}{\ensuremath{\operatorname{Ker}}}
+\newcommand{\image}{\ensuremath{\operatorname{Im}}}
+\newcommand{\variance}{\ensuremath{\operatorname{var}}}
+\newcommand{\divergence}{\ensuremath{\operatorname{div}}}
+\newcommand{\Span}{\ensuremath{\operatorname{span}}}
+\newcommand{\vecop}{\ensuremath{\operatorname{vec}}}
+\newcommand{\vechop}{\ensuremath{\operatorname{vech}}}
+\newcommand{\Log}{\ensuremath{\operatorname{Log}}}
+\newcommand{\atan}{\ensuremath{\operatorname{atan}}}
+
+% Functional analyisis
+\newcommand{\hausdorff}{\ensuremath{\mathcal{H}}}
+
+% Functions
+\newcommand{\indicator}{\ensuremath{\mathbf{1}}}
+
+% Environments
+\newcommand{\be}{\begin{equation}}
+\newcommand{\ee}{\end{equation}}
+\newcommand{\bM}{\begin{bmatrix}}
+\newcommand{\eM}{\end{bmatrix}}
+
+% Symbols
+\newcommand{\defeq}{\ensuremath{\overset{\Delta}{=}}}
+
+% ------------------------------------------------------------------------------
+%                                                                          Hacks
+% ------------------------------------------------------------------------------ 
+\renewcommand{\hat}[1]{\widehat{#1}}
+
+% ------------------------------------------------------------------------------
+%                                                    Figures centered vertically
+% ------------------------------------------------------------------------------
+\newsavebox{\VL@tempbox}
+\newlength{\VL@templength}
+
+\newcommand{\vcenterbox}[1]
+{%
+   \sbox{\VL@tempbox}{#1}%
+   \settowidth{\VL@templength}{\usebox{\VL@tempbox}}%
+   \parbox{\VL@templength}{\usebox{\VL@tempbox}}%
+}
+
+\newcommand{\vcenterboxb}[1]
+{%
+   \sbox{\VL@tempbox}{#1}%
+   \settoheight{\VL@templength}{\usebox{\VL@tempbox}}%
+   \raisebox{-.5\VL@templength}{\usebox{\VL@tempbox}}%
+}
+
+% ------------------------------------------------------------------------------
+%                                               Cuts, modifications, annotations
+% ------------------------------------------------------------------------------
+
+\newcommand{\cut}[1]{}
+
+% ------------------------------------------------------------------------------
+%                                                                         Beamer
+% ------------------------------------------------------------------------------ 
+\newcommand{\smallframetitle}[1]
+{%
+  {\noindent\Large\bf #1\vspace{.1em}\hrule\hrule}%
+  \vspace{.5em}
+}
+
+% ------------------------------------------------------------------------------
+%                                                            Partial derivatives
+% ------------------------------------------------------------------------------ 
+
+\def\@@pdiffchomp#1%
+{%
+ \ifx#1\end%
+  \let\next=\relax%
+ \else%
+   \toks0=\expandafter{\the\toks0{\partial #1}}%
+   \let\next=\@@pdiffchomp%
+ \fi%
+ \next%
+}
+
+% use as in \pdiff{f(x,y,z)}{{x}{y}{z}}.
+\def\pdiff#1#2%
+{\tracingmacros=0%
+% \mathchoice{}{}{}{} - select expr. for Display, Text, Script, ScriptSrcript
+% \expandafter - expand second token on the right, then the first
+%              - used to first expand the parameters of a macro and then
+%              - the macro
+% \ifx         - true if next two tokens are equal
+\toks0={}%
+\@@pdiffchomp#2\end%
+\mathchoice%
+  {\begingroup%
+      \frac{\partial#1}{\the\toks0}%
+    \endgroup%
+  }{\displaystyle{%
+    \begingroup%
+      \frac{\partial#1}{\the\toks0}%
+    \endgroup%
+  }}{\scriptstyle{
+    \begingroup%   
+      \frac{\partial#1}{\the\toks0}%
+    \endgroup%
+  }}{\scriptstyle{%
+    \begingroup%
+      \frac{\partial#1}{\the\toks0}%
+    \endgroup%
+  }}%
+  \tracingmacros=0%
+}
+
+
+
+% ------------------------------------------------------------------------------
+\endinput
+% ------------------------------------------------------------------------------
+
+

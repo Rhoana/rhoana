@@ -1,0 +1,198 @@
+	.version 1.4
+	.target sm_10, map_f64_to_f32
+	// compiled with C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v4.0\bin\/../open64/lib//be.exe
+	// nvopencc 4.0 built on 2011-05-13
+
+	//-----------------------------------------------------------
+	// Compiling C:/Users/Cmor/AppData/Local/Temp/tmpxft_00000a54_00000000-11_predict2.cpp3.i (C:/Users/Cmor/AppData/Local/Temp/ccBI#.a02580)
+	//-----------------------------------------------------------
+
+	//-----------------------------------------------------------
+	// Options:
+	//-----------------------------------------------------------
+	//  Target:ptx, ISA:sm_10, Endian:little, Pointer Size:64
+	//  -O3	(Optimization level)
+	//  -g0	(Debug level)
+	//  -m2	(Report advisories)
+	//-----------------------------------------------------------
+
+	.file	1	"C:/Users/Cmor/AppData/Local/Temp/tmpxft_00000a54_00000000-10_predict2.cudafe2.gpu"
+	.file	2	"c:\program files (x86)\microsoft visual studio 10.0\vc\include\codeanalysis\sourceannotations.h"
+	.file	3	"C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v4.0\bin\/../include\crt/device_runtime.h"
+	.file	4	"C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v4.0\bin\/../include\host_defines.h"
+	.file	5	"C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v4.0\bin\/../include\builtin_types.h"
+	.file	6	"c:\program files\nvidia gpu computing toolkit\cuda\v4.0\include\device_types.h"
+	.file	7	"c:\program files\nvidia gpu computing toolkit\cuda\v4.0\include\driver_types.h"
+	.file	8	"c:\program files\nvidia gpu computing toolkit\cuda\v4.0\include\surface_types.h"
+	.file	9	"c:\program files\nvidia gpu computing toolkit\cuda\v4.0\include\texture_types.h"
+	.file	10	"c:\program files\nvidia gpu computing toolkit\cuda\v4.0\include\vector_types.h"
+	.file	11	"c:\program files\nvidia gpu computing toolkit\cuda\v4.0\include\builtin_types.h"
+	.file	12	"c:\program files\nvidia gpu computing toolkit\cuda\v4.0\include\host_defines.h"
+	.file	13	"C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v4.0\bin\/../include\device_launch_parameters.h"
+	.file	14	"c:\program files\nvidia gpu computing toolkit\cuda\v4.0\include\crt\storage_class.h"
+	.file	15	"C:\Program Files (x86)\Microsoft Visual Studio 10.0\VC\bin/../../VC/INCLUDE\time.h"
+	.file	16	"predict2.cu"
+	.file	17	"C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v4.0\bin\/../include\common_functions.h"
+	.file	18	"c:\program files\nvidia gpu computing toolkit\cuda\v4.0\include\math_functions.h"
+	.file	19	"c:\program files\nvidia gpu computing toolkit\cuda\v4.0\include\math_constants.h"
+	.file	20	"c:\program files\nvidia gpu computing toolkit\cuda\v4.0\include\device_functions.h"
+	.file	21	"c:\program files\nvidia gpu computing toolkit\cuda\v4.0\include\sm_11_atomic_functions.h"
+	.file	22	"c:\program files\nvidia gpu computing toolkit\cuda\v4.0\include\sm_12_atomic_functions.h"
+	.file	23	"c:\program files\nvidia gpu computing toolkit\cuda\v4.0\include\sm_13_double_functions.h"
+	.file	24	"c:\program files\nvidia gpu computing toolkit\cuda\v4.0\include\sm_20_atomic_functions.h"
+	.file	25	"c:\program files\nvidia gpu computing toolkit\cuda\v4.0\include\sm_20_intrinsics.h"
+	.file	26	"c:\program files\nvidia gpu computing toolkit\cuda\v4.0\include\surface_functions.h"
+	.file	27	"c:\program files\nvidia gpu computing toolkit\cuda\v4.0\include\texture_fetch_functions.h"
+	.file	28	"c:\program files\nvidia gpu computing toolkit\cuda\v4.0\include\math_functions_dbl_ptx1.h"
+
+
+	.entry _Z13predictKernelPKfiiPKiS2_S0_S2_S2_iiPii (
+		.param .u64 __cudaparm__Z13predictKernelPKfiiPKiS2_S0_S2_S2_iiPii_x,
+		.param .s32 __cudaparm__Z13predictKernelPKfiiPKiS2_S0_S2_S2_iiPii_n,
+		.param .s32 __cudaparm__Z13predictKernelPKfiiPKiS2_S0_S2_S2_iiPii_mdim,
+		.param .u64 __cudaparm__Z13predictKernelPKfiiPKiS2_S0_S2_S2_iiPii_treemap,
+		.param .u64 __cudaparm__Z13predictKernelPKfiiPKiS2_S0_S2_S2_iiPii_nodestatus,
+		.param .u64 __cudaparm__Z13predictKernelPKfiiPKiS2_S0_S2_S2_iiPii_xbestsplit,
+		.param .u64 __cudaparm__Z13predictKernelPKfiiPKiS2_S0_S2_S2_iiPii_bestvar,
+		.param .u64 __cudaparm__Z13predictKernelPKfiiPKiS2_S0_S2_S2_iiPii_nodeclass,
+		.param .s32 __cudaparm__Z13predictKernelPKfiiPKiS2_S0_S2_S2_iiPii_nclass,
+		.param .s32 __cudaparm__Z13predictKernelPKfiiPKiS2_S0_S2_S2_iiPii_ntree,
+		.param .u64 __cudaparm__Z13predictKernelPKfiiPKiS2_S0_S2_S2_iiPii_countts,
+		.param .s32 __cudaparm__Z13predictKernelPKfiiPKiS2_S0_S2_S2_iiPii_maxTreeSize)
+	{
+	.reg .u16 %rh<4>;
+	.reg .u32 %r<40>;
+	.reg .u64 %rd<31>;
+	.reg .f32 %f<4>;
+	.reg .pred %p<8>;
+	.loc	16	9	0
+$LDWbegin__Z13predictKernelPKfiiPKiS2_S0_S2_S2_iiPii:
+	mov.u16 	%rh1, %nctaid.x;
+	mov.u16 	%rh2, %ctaid.y;
+	mul.wide.u16 	%r1, %rh1, %rh2;
+	cvt.u32.u16 	%r2, %ctaid.x;
+	add.u32 	%r3, %r2, %r1;
+	cvt.u32.u16 	%r4, %ntid.x;
+	mul.lo.u32 	%r5, %r4, %r3;
+	cvt.u32.u16 	%r6, %tid.x;
+	add.u32 	%r7, %r6, %r5;
+	ld.param.s32 	%r8, [__cudaparm__Z13predictKernelPKfiiPKiS2_S0_S2_S2_iiPii_n];
+	setp.le.s32 	%p1, %r8, %r7;
+	@%p1 bra 	$Lt_0_4354;
+	ld.param.s32 	%r9, [__cudaparm__Z13predictKernelPKfiiPKiS2_S0_S2_S2_iiPii_ntree];
+	mov.u32 	%r10, 0;
+	setp.le.s32 	%p2, %r9, %r10;
+	@%p2 bra 	$Lt_0_4354;
+	ld.param.s32 	%r9, [__cudaparm__Z13predictKernelPKfiiPKiS2_S0_S2_S2_iiPii_ntree];
+	mov.s32 	%r11, %r9;
+	mov.s32 	%r12, 0;
+	ld.param.s32 	%r13, [__cudaparm__Z13predictKernelPKfiiPKiS2_S0_S2_S2_iiPii_maxTreeSize];
+	cvt.s64.s32 	%rd1, %r13;
+	mul.wide.s32 	%rd2, %r13, 4;
+	ld.param.u64 	%rd3, [__cudaparm__Z13predictKernelPKfiiPKiS2_S0_S2_S2_iiPii_nodestatus];
+	mov.s64 	%rd4, %rd3;
+	ld.param.s32 	%r14, [__cudaparm__Z13predictKernelPKfiiPKiS2_S0_S2_S2_iiPii_nclass];
+	mul.lo.s32 	%r15, %r14, %r7;
+	ld.param.u64 	%rd5, [__cudaparm__Z13predictKernelPKfiiPKiS2_S0_S2_S2_iiPii_countts];
+	ld.param.u64 	%rd6, [__cudaparm__Z13predictKernelPKfiiPKiS2_S0_S2_S2_iiPii_nodeclass];
+	mov.s32 	%r16, 0;
+	mov.s32 	%r17, %r11;
+$Lt_0_4866:
+ //<loop> Loop body line 9, nesting depth: 1, estimated iterations: unknown
+	ld.global.s32 	%r18, [%rd4+0];
+	mov.u32 	%r19, -1;
+	setp.eq.s32 	%p3, %r18, %r19;
+	@%p3 bra 	$Lt_0_7170;
+	mul.lo.s32 	%r20, %r12, 2;
+	ld.param.u64 	%rd7, [__cudaparm__Z13predictKernelPKfiiPKiS2_S0_S2_S2_iiPii_xbestsplit];
+	ld.param.u64 	%rd8, [__cudaparm__Z13predictKernelPKfiiPKiS2_S0_S2_S2_iiPii_bestvar];
+	ld.param.u64 	%rd9, [__cudaparm__Z13predictKernelPKfiiPKiS2_S0_S2_S2_iiPii_x];
+	ld.param.u64 	%rd10, [__cudaparm__Z13predictKernelPKfiiPKiS2_S0_S2_S2_iiPii_treemap];
+	mov.s32 	%r21, 0;
+$Lt_0_5634:
+	add.s32 	%r22, %r12, %r21;
+	cvt.s64.s32 	%rd11, %r22;
+	mul.wide.s32 	%rd12, %r22, 4;
+	mul.lo.s32 	%r23, %r22, 2;
+	cvt.s64.s32 	%rd13, %r23;
+	mul.wide.s32 	%rd14, %r23, 4;
+	ld.param.u64 	%rd10, [__cudaparm__Z13predictKernelPKfiiPKiS2_S0_S2_S2_iiPii_treemap];
+	add.u64 	%rd15, %rd10, %rd14;
+	ld.param.u64 	%rd7, [__cudaparm__Z13predictKernelPKfiiPKiS2_S0_S2_S2_iiPii_xbestsplit];
+	add.u64 	%rd16, %rd12, %rd7;
+	ld.global.f32 	%f1, [%rd16+0];
+	ld.param.u64 	%rd8, [__cudaparm__Z13predictKernelPKfiiPKiS2_S0_S2_S2_iiPii_bestvar];
+	add.u64 	%rd17, %rd12, %rd8;
+	ld.global.s32 	%r24, [%rd17+0];
+	sub.s32 	%r25, %r24, 1;
+	ld.param.s32 	%r8, [__cudaparm__Z13predictKernelPKfiiPKiS2_S0_S2_S2_iiPii_n];
+	mul.lo.s32 	%r26, %r8, %r25;
+	add.s32 	%r27, %r7, %r26;
+	cvt.s64.s32 	%rd18, %r27;
+	mul.wide.s32 	%rd19, %r27, 4;
+	ld.param.u64 	%rd9, [__cudaparm__Z13predictKernelPKfiiPKiS2_S0_S2_S2_iiPii_x];
+	add.u64 	%rd20, %rd9, %rd19;
+	ld.global.f32 	%f2, [%rd20+0];
+	setp.ge.f32 	%p4, %f1, %f2;
+	@!%p4 bra 	$Lt_0_6146;
+	.loc	16	30	0
+	ld.global.s32 	%r28, [%rd15+0];
+	sub.s32 	%r29, %r28, 1;
+	bra.uni 	$Lt_0_5890;
+$Lt_0_6146:
+	ld.global.s32 	%r30, [%rd15+4];
+	sub.s32 	%r29, %r30, 1;
+$Lt_0_5890:
+	mov.s32 	%r21, %r29;
+	add.s32 	%r31, %r29, %r12;
+	cvt.s64.s32 	%rd21, %r31;
+	mul.wide.s32 	%rd22, %r31, 4;
+	.loc	16	9	0
+	ld.param.u64 	%rd3, [__cudaparm__Z13predictKernelPKfiiPKiS2_S0_S2_S2_iiPii_nodestatus];
+	.loc	16	30	0
+	add.u64 	%rd23, %rd3, %rd22;
+	ld.global.s32 	%r32, [%rd23+0];
+	mov.u32 	%r33, -1;
+	setp.ne.s32 	%p5, %r32, %r33;
+	@%p5 bra 	$Lt_0_5634;
+	bra.uni 	$Lt_0_5122;
+$Lt_0_7170:
+	mov.s32 	%r21, 0;
+$Lt_0_5122:
+	.loc	16	36	0
+	add.s32 	%r34, %r12, %r21;
+	cvt.s64.s32 	%rd24, %r34;
+	mul.wide.s32 	%rd25, %r34, 4;
+	.loc	16	9	0
+	ld.param.u64 	%rd6, [__cudaparm__Z13predictKernelPKfiiPKiS2_S0_S2_S2_iiPii_nodeclass];
+	.loc	16	36	0
+	add.u64 	%rd26, %rd6, %rd25;
+	ld.global.s32 	%r35, [%rd26+0];
+	add.s32 	%r36, %r15, %r35;
+	cvt.s64.s32 	%rd27, %r36;
+	mul.wide.s32 	%rd28, %r36, 4;
+	.loc	16	9	0
+	ld.param.u64 	%rd5, [__cudaparm__Z13predictKernelPKfiiPKiS2_S0_S2_S2_iiPii_countts];
+	.loc	16	36	0
+	add.u64 	%rd29, %rd5, %rd28;
+	ld.global.s32 	%r37, [%rd29+-4];
+	add.s32 	%r38, %r37, 1;
+	st.global.s32 	[%rd29+-4], %r38;
+	add.s32 	%r16, %r16, 1;
+	.loc	16	9	0
+	ld.param.s32 	%r13, [__cudaparm__Z13predictKernelPKfiiPKiS2_S0_S2_S2_iiPii_maxTreeSize];
+	.loc	16	36	0
+	add.s32 	%r12, %r12, %r13;
+	add.u64 	%rd4, %rd2, %rd4;
+	.loc	16	9	0
+	ld.param.s32 	%r9, [__cudaparm__Z13predictKernelPKfiiPKiS2_S0_S2_S2_iiPii_ntree];
+	.loc	16	36	0
+	setp.ne.s32 	%p6, %r9, %r16;
+	@%p6 bra 	$Lt_0_4866;
+$Lt_0_4354:
+$Lt_0_3842:
+	.loc	16	40	0
+	exit;
+$LDWend__Z13predictKernelPKfiiPKiS2_S0_S2_S2_iiPii:
+	} // _Z13predictKernelPKfiiPKiS2_S0_S2_S2_iiPii
+
