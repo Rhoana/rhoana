@@ -7,12 +7,15 @@ function segment_image(varargin)
 % Outputs the resulting probabilities and segmentations to out_file_path as an hdf5 file
 
 %Add the Segmentation lib folder to the path
-addpath(genpath(fullfile('..', 'lib', 'segmentation')));
+d = fileparts(which(mfilename));
+addpath(genpath(fullfile(d, '..', 'lib', 'segmentation')));
 
 % Check for errors
 if length(varargin) ~= 3
     arg_error();
 end
+
+fprintf(1, 'segment_image starting\n');
 
 image_file_path = varargin{1};
 forest_file_path = varargin{2};
