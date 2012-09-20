@@ -64,7 +64,6 @@ rfutils: $(SRC)rfutils.cpp
 
 
 clean:	
-<<<<<<< HEAD
 	rm twonorm_test -rf
 	rm  $(BUILD)*.o *.o -rf
 	rm *~ -rf
@@ -72,12 +71,3 @@ clean:
 	rm *.mexa64 -rf
 	rm classRF -rf
 	rm *.exe -rf
-=======
-	rm -rf twonorm_test 
-	rm -rf  $(BUILD)*.o *.o 
-	rm -rf *~ 
-	rm -rf *.mexw32 twonorm_test 
-	rm -rf *.mexa64 
-	rm -rf classRF 
-	rm -rf *.exe 
-
