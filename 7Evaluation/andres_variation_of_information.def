@@ -1,0 +1,3 @@
+LIBRARY "andres_variation_of_information"
+EXPORTS 
+	mexFunction
