@@ -58,12 +58,12 @@ segs = uint8(segs) * 255;
 
 % Save segmentations and probabilities
 if ~exist(out_file_path, 'file')
-    h5create(out_file_path, '/improb', size(imProb), 'DataType', 'double');
-    h5create(out_file_path, '/segs', size(segs), 'DataType', 'uint8');
+  h5create(out_file_path, '/improb', [Inf, Inf], 'DataType', 'double', 'ChunkSize', [64,64], 'Deflate', 9, 'Shuffle', true);
+  h5create(out_file_path, '/segs', [Inf, Inf, Inf], 'DataType', 'uint8', 'ChunkSize', [64,64,10], 'Deflate', 9);
 end
 
-h5write(out_file_path, '/improb', imProb);
-h5write(out_file_path, '/segs', segs);
+h5write(out_file_path, '/improb', imProb, [1, 1], size(imProb));
+h5write(out_file_path, '/segs', segs, [1, 1, 1], size(segs));
 
 fprintf(1, 'segment_image successfuly wrote to file: %s.\n', out_file_path);
 
