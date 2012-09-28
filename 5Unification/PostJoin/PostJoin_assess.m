@@ -2,8 +2,9 @@ addpath(fullfile('..', '..', '7Evaluation'));
 
 src_dir = 'C:\dev\datasets\conn\main_dataset\ac3train\';
 dice_string = 'diced_xy=512_z=32_xyOv=128_zOv=12_dwnSmp=1';
-result_name = 'res_from_sept_14_seg60_scf095_PF';
-%result_name = 'res_from_sept_14_seg60_scf0975_PF';
+%result_name = 'res_from_sept_14_seg60_scf09_PF';
+%result_name = 'res_from_sept_14_seg60_scf095_PF';
+result_name = 'res_from_sept_14_seg60_scf0975_PF';
 nresult = 1;
 
 if ~exist('seg_vol', 'var')
