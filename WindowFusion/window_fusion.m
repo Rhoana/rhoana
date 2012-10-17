@@ -1,8 +1,8 @@
-%function fusion_set_of_sections( input_seg_hdf5, output_hdf5 )
+function fusion_set_of_sections( input_seg_hdf5, output_mat )
 
-input_seg_hdf5 = 'ExampleDicedBlock.hdf5';
-output_mat = 'ExampleFusionOutput.mat';
-output_hdf5 = 'ExampleFusionOutput.hdf5';
+%input_seg_hdf5 = 'ExampleDicedBlock.hdf5';
+%output_mat = 'ExampleFusionOutput.mat';
+%output_hdf5 = 'ExampleFusionOutput.hdf5';
 
 %%%%% FUSION SETTINGS %%%%%
 
