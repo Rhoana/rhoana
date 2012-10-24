@@ -56,15 +56,20 @@ segs = gapCompletion(input_image, imProb, threshRange, l_s_range, l_gc_range);
 %Convert
 segs = uint8(segs) * 255;
 
+% avoid writing partial files
+temp_file_path = [out_file_path, '_partial'];
+
 % Save segmentations and probabilities
-if ~exist(out_file_path, 'file')
-  h5create(out_file_path, '/improb', [Inf, Inf], 'DataType', 'double', 'ChunkSize', [64,64], 'Deflate', 9, 'Shuffle', true);
-  h5create(out_file_path, '/segs', [Inf, Inf, Inf], 'DataType', 'uint8', 'ChunkSize', [64,64,10], 'Deflate', 9);
+if exist(temp_file_path, 'file'),
+  delete(temp_file_path);
 end
+h5create(temp_file_path, '/improb', [Inf, Inf], 'DataType', 'double', 'ChunkSize', [64,64], 'Deflate', 9, 'Shuffle', true);
+h5create(temp_file_path, '/segs', [Inf, Inf, Inf], 'DataType', 'uint8', 'ChunkSize', [64,64,10], 'Deflate', 9);
 
-h5write(out_file_path, '/improb', imProb, [1, 1], size(imProb));
-h5write(out_file_path, '/segs', segs, [1, 1, 1], size(segs));
+h5write(temp_file_path, '/improb', imProb, [1, 1], size(imProb));
+h5write(temp_file_path, '/segs', segs, [1, 1, 1], size(segs));
 
+movefile(temp_file_path, out_file_path);
 fprintf(1, 'segment_image successfuly wrote to file: %s.\n', out_file_path);
 
 return;
