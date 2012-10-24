@@ -4,6 +4,10 @@ function window_fusion( input_seg_hdf5, output_hdf5 )
 d = fileparts(which(mfilename));
 addpath(genpath(fullfile(d, '..', 'lib', 'fusion')));
 
+%input_seg_hdf5 = 'ExampleDicedBlock.hdf5';
+%output_mat = 'ExampleFusionOutput.mat';
+%output_hdf5 = 'ExampleFusionOutput.hdf5';
+
 %%%%% FUSION SETTINGS %%%%%
 
 dwnSmp = 1;
