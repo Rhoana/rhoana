@@ -1,18 +1,27 @@
 addpath(fullfile('..', '..', '7Evaluation'));
 
-src_dir = 'C:\dev\datasets\conn\main_dataset\ac3train\';
+dataset_dir = 'C:\dev\datasets\conn\main_dataset\';
+%subvol_name = 'ac3train';
+subvol_name = 'ac3test';
+src_dir = fullfile(dataset_dir, subvol_name);
+%src_dir = 'C:\dev\datasets\conn\main_dataset\ac3train\';
+
 dice_string = 'diced_xy=512_z=32_xyOv=128_zOv=12_dwnSmp=1';
 %result_name = 'res_from_sept_14_seg60_scf09_PF';
 %result_name = 'res_from_sept_14_seg60_scf095_PF';
-result_name = 'res_from_sept_14_seg60_scf0975_PF';
-nresult = 1;
+%result_name = 'res_from_sept_14_seg60_scf0975_PF';
+%result_name = 'res_from_sept_30_minotrC_PF';
+result_name = 'res_from_0ct02_PF';
 
-if ~exist('seg_vol', 'var')
-    fprintf(1, 'Loading working from PostJoin_Size.\n');
-    load(sprintf('PostJoin_Size_working_%s.mat', result_name));
-end
+nresult = 3;
 
-ref_folder = 'C:\dev\datasets\groundtruth\gt_with_branching_regions_grown\train';
+%if ~exist('seg_vol', 'var')
+%    fprintf(1, 'Loading working from PostJoin_Size.\n');
+%    load(sprintf('PostJoin_Size_working_%s.mat', result_name));
+%end
+
+%ref_folder = 'C:\dev\datasets\groundtruth\gt_with_branching_regions_grown\train';
+ref_folder = 'C:\dev\datasets\groundtruth\gt_with_branching_regions_grown\test';
 
 % Prep for reference data
 
@@ -40,8 +49,10 @@ for zi = 1:length(ref_files)
 end
 
 
-for minsegsize = [1000 2500 5000 10000 15000 20000 25000]
-    load(sprintf('PostJoin_%s_Size=%d.mat', result_name, minsegsize));
+for minsegsize = [0 5000 10000 15000 20000 25000]
+%for minsegsize = [1000 2500 5000 10000 15000 20000 25000]
+    load(sprintf('PostJoin_%s_%s_FS%d_Size=%d.mat', subvol_name, result_name, nresult, minsegsize));
+    %load(sprintf('PostJoin_%s_Size=%d.mat', result_name, minsegsize));
     score = andres_variation_of_information(segments, ref_vol);
     fprintf(1, 'Size=%d, Score=%1.4f.\n', minsegsize, score);
 %     for maxjoinscore = [0.1 0.2 0.3 0.4 0.5]

@@ -1,13 +1,20 @@
-src_dir = 'C:\dev\datasets\conn\main_dataset\ac3train\';
+dataset_dir = 'C:\dev\datasets\conn\main_dataset\';
+subvol_name = 'ac3train';
+%subvol_name = 'ac3test';
+src_dir = fullfile(dataset_dir, subvol_name);
+%src_dir = 'C:\dev\datasets\conn\main_dataset\ac4full_ds2\';
+%src_dir = 'C:\dev\datasets\conn\main_dataset\ac3train\';
 dice_string = 'diced_xy=512_z=32_xyOv=128_zOv=12_dwnSmp=1';
-result_name = 'res_from_sept_14_seg60_scf09_PF';
+%result_name = 'res_from_0ct02_PF';
+%result_name = 'res_from_sept_14_seg60_scf0925_PF';
 %result_name = 'res_from_sept_14_seg60_scf095_PF';
 %result_name = 'res_from_sept_14_seg60_scf0975_PF';
-nresult = 1;
+result_name = 'res_from_sept_30_minotrC_PF';
+nresult = 3;
 
-if exist('src_vol', 'var')
-    fprintf(1, 'Reusing volumes.\n');
-else
+%if exist('src_vol', 'var')
+%    fprintf(1, 'Reusing volumes.\n');
+%else
     
     %Load src images
     fprintf(1, 'Loading images.\n');
@@ -30,11 +37,12 @@ else
         else
             src_vol(:,:,zi) = img;
         end
+        src_vol(:,:,zi) = imadjust(src_vol(:,:,zi));
     end
     
     %Load probabilities
     fprintf(1, 'Loading probabilities.\n');
-    prob_folder = fullfile(src_dir, 'forest_prob');
+    prob_folder = fullfile(src_dir, 'forest_prob_adj');
     prob_files = [ dir(fullfile(prob_folder, '*.mat')) ];
     prob_files = sort({prob_files.name});
     
@@ -81,7 +89,7 @@ else
         dnum = dnum + 1;
         fprintf(1, 'Growing regions: %d.\n', dnum);
     end
-end
+%end
 
 sz = size(seg_vol);
 segs = double(max(seg_vol(:)));
@@ -235,7 +243,7 @@ for minsegsize = [1000 2500 5000 10000 15000 20000 25000];
     close all;
     quickshowdualhsv_demo(src_vol, cleanseg)
     
-    save(sprintf('PostJoin_%s_Size=%d.mat', result_name, minsegsize), 'segments', 'cleanseg');
+    save(sprintf('PostJoin_%s_%s_FS%d_Size=%d.mat', subvol_name, result_name, nresult, minsegsize), 'segments', 'cleanseg');
     
     %prepare for more joining
     seg_vol = segments;

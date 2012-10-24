@@ -1,13 +1,15 @@
-function export_merge (src_vol, seg_vol, alpha, dirname)
+function export_merge_prob (src_vol, seg_vol, prob_vol, alpha, dirname)
 %Export 3D image as series of 2D images
 %Labels: label images (16bit if possible otherwise 32bit)
 %Overlay: seg_vol labels (random colors) over src_vol image (alpha blend)
 
 labeldir = fullfile(dirname, 'labels');
 overlaydir = fullfile(dirname, 'overlay');
+probdir = fullfile(dirname, 'probs');
 mkdir(dirname);
 mkdir(labeldir);
 mkdir(overlaydir);
+mkdir(probdir);
 
 %compress seg_vol to as few labels as possible
 fprintf(1, 'Compressing labels.\n');
@@ -63,6 +65,10 @@ for z = 1:min(size(src_vol,3),size(new_vol,3))
   
     %Write overlay image
     imwrite(overlay, fullfile(overlaydir, [filestring '.png']));
+    
+    %Write probability image
+    prob_2d = uint16(prob_vol(:,:,z) * (2^16-1));
+    imwrite(prob_2d, fullfile(probdir, [filestring '.png']));
       
 end
 
