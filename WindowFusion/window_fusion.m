@@ -351,11 +351,11 @@ labeled_volume(nz) = (uint64(2) ^ 32) * uint64(str2num(global_block_idx)) + uint
 
 % avoid writing partial files
 temp_hdf5 = [output_hdf5, '_partial'];
-if exists(temp_hdf5, 'file'),
+if exist(temp_hdf5, 'file'),
   delete(temp_hdf5);
 end
 h5create(temp_hdf5, '/labels', [Inf, Inf, Inf], 'DataType', 'uint64', 'ChunkSize', [64, 64, 4], 'Deflate', 9, 'Shuffle', true);
-h5write(temp_hdf5, '/labels', labeled_volume);
+h5write(temp_hdf5, '/labels', labeled_volume, [1, 1, 1], size(labeled_volume));
 movefile(temp_hdf5, output_hdf5);
 
 

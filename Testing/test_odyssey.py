@@ -36,7 +36,7 @@ if __name__ == '__main__':
         output = segmentation_files[sliceidx]
         if not os.path.exists(output):
             runner.start([os.path.join('..', 'CubeDicing', 'segment_image_bsub.sh'),
-                          input_volume, sliceidx, output])
+                          input_volume, str(sliceidx), output])
     runner.wait_all()
 
     # dice out two cubes
