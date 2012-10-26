@@ -2,7 +2,7 @@ import os
 import os.path
 import subprocess
 
-class Runner():
+class Runner(object):
     def __init__(self):
         self.jobs = []
 
@@ -40,14 +40,16 @@ if __name__ == '__main__':
     runner.wait_all()
 
     # dice out two cubes
-    runner.start([os.path.join('..', 'CubeDicing', 'dice_block_bsub.sh'),
-                  '80', '80',
-                  '220', '220'] + segmentation_files +
-                 [os.path.join('dicedblocks', 'block1.hdf5')])
-    runner.start([os.path.join('..', 'CubeDicing', 'dice_block_bsub.sh'),
-                  '180', '80',
-                  '320', '220'] + segmentation_files +
-                 [os.path.join('dicedblocks', 'block2.hdf5')])
+    if not os.path.exists(os.path.join('dicedblocks', 'block1.hdf5')):
+        runner.start([os.path.join('..', 'CubeDicing', 'dice_block_bsub.sh'),
+                      '80', '80',
+                      '220', '220'] + segmentation_files +
+                     [os.path.join('dicedblocks', 'block1.hdf5')])
+    if not os.path.exists(os.path.join('dicedblocks', 'block2.hdf5')):
+        runner.start([os.path.join('..', 'CubeDicing', 'dice_block_bsub.sh'),
+                      '180', '80',
+                      '320', '220'] + segmentation_files +
+                     [os.path.join('dicedblocks', 'block2.hdf5')])
     runner.wait_all()
 
     # fuse the cubes
