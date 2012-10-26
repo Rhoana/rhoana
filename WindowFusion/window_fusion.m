@@ -347,7 +347,7 @@ raw_obj_vals = solutions_LP_fusion.raw_obj_vals;
 % Map to dense volume and add global block idx in high bits (but only in nonzero labels)
 labeled_volume = uint64(i_s_L_sppst);
 nz = find(labeled_volume);
-labeled_volume(nz) = (uint(2) ^ 32) * global_block_idx + uint64(full(spt_M(labeled_volume(nz))));
+labeled_volume(nz) = (uint64(2) ^ 32) * uint64(str2num(global_block_idx)) + uint64(full(spt_M(labeled_volume(nz))));
 
 % avoid writing partial files
 temp_hdf5 = [output_hdf5, '_partial'];
