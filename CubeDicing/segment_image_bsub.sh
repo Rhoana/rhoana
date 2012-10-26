@@ -1,3 +1,4 @@
+#!/bin/bash
 echo "Segmenting" $*
 
 cp /n/lichtmanfs1/thouis_jones/Connectome/Pipeline/0Control/Swift/connectome/$3 $3

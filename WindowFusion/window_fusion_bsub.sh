@@ -1,3 +1,5 @@
+#!/bin/bash
+
 echo "Window Fusion bsub" $*
 DIR=$(dirname ${BASH_SOURCE[0]})
 ARGS=$(printf ",'%s'" $* | cut -c2-)
