@@ -1,9 +1,10 @@
 echo "Segmenting" $*
 
-cp /n/home02/thouis_jones/Connectome/Pipeline/0Control/Swift/connectome/$3 $3
+cp /n/lichtmanfs1/thouis_jones/Connectome/Pipeline/0Control/Swift/connectome/$3 $3
 # short circuit
 if [ -f "$3" ]
 then
+    echo "Copied existing"
     exit 0
 fi
 
