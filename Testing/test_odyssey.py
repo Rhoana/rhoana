@@ -22,7 +22,7 @@ if __name__ == '__main__':
     runner = Runner()
 
     # set up output directories
-    for d in 'segmentations dicedblocks fusedblocks overlap_maps'.split(' '):
+    for d in 'segmentations dicedblocks fusedblocks matchedblocks overlap_maps'.split(' '):
         if not os.path.exists(d):
             os.mkdir(d)
 
@@ -58,4 +58,13 @@ if __name__ == '__main__':
                       os.path.join('dicedblocks', 'block%d.hdf5' % idx),
                       str(idx),
                       os.path.join('fusedblocks', 'fused%d.hdf5' % idx)])
+    runner.wait_all()
+
+    # pairwise join the cubes
+    runner.start([os.path.join('..', 'PairwiseMatching', 'pairwise_match_labels_bsub.sh'),
+                  os.path.join('fusedblocks', 'fused1.hdf5'),
+                  os.path.join('fusedblocks', 'fused2.hdf5'),
+                  '1', '20',
+                  os.path.join('matchedblocks', 'matchedblock1.hdf5'),
+                  os.path.join('matchedblocks', 'matchedblock2.hdf5'),
     runner.wait_all()
