@@ -1,4 +1,4 @@
-function pairwise_match(block1, direction, block2, halo_size, outblock1, outblock2)
+function pairwise_match(block1, block2, direction, halo_size, outblock1, outblock2)
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % Note: direction indicates the relative position of the blocks (1, 2, 3 => adjacent in X, Y, Z).
@@ -32,6 +32,9 @@ lo_block1 = [1, 1, 1];
 hi_block1 = blocksize;
 lo_block2 = [1, 1, 1];
 hi_block2 = blocksize;
+
+direction = str2num(direction);
+halo_size = str2num(halo_size);
 
 % Adjust overlapping region boundaries for direction
 lo_block1(direction) = blocksize(direction) - 2 * halo_size + 1;
