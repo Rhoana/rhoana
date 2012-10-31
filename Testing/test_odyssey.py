@@ -43,12 +43,12 @@ if __name__ == '__main__':
     if not os.path.exists(os.path.join('dicedblocks', 'block1.hdf5')):
         runner.start([os.path.join('..', 'CubeDicing', 'dice_block_bsub.sh'),
                       '80', '80',
-                      '220', '220'] + segmentation_files +
+                      '520', '520'] + segmentation_files +
                      [os.path.join('dicedblocks', 'block1.hdf5')])
     if not os.path.exists(os.path.join('dicedblocks', 'block2.hdf5')):
         runner.start([os.path.join('..', 'CubeDicing', 'dice_block_bsub.sh'),
-                      '180', '80',
-                      '320', '220'] + segmentation_files +
+                      '480', '80',
+                      '920', '520'] + segmentation_files +
                      [os.path.join('dicedblocks', 'block2.hdf5')])
     runner.wait_all()
 
@@ -66,5 +66,5 @@ if __name__ == '__main__':
                   os.path.join('fusedblocks', 'fused2.hdf5'),
                   '1', '20',
                   os.path.join('matchedblocks', 'matchedblock1.hdf5'),
-                  os.path.join('matchedblocks', 'matchedblock2.hdf5'),
+                  os.path.join('matchedblocks', 'matchedblock2.hdf5')])
     runner.wait_all()
