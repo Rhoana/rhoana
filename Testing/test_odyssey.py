@@ -7,6 +7,7 @@ class Runner(object):
         self.jobs = []
 
     def start(self, jobargs):
+        jobargs = [str(j) for j in jobargs]
         new_job = subprocess.Popen(jobargs)
         self.jobs += [new_job]
 
@@ -30,9 +31,14 @@ if __name__ == '__main__':
                                '..', '0Control', 'Swift',
                                'connectome', 'Volume_odyssey.txt')
 
-    # label the first 20 slices
-    segmentation_files = [os.path.join('segmentations', 'segmentation%d.hdf5' % sliceidx) for sliceidx in range(20)]
-    for sliceidx in range(20):
+    xy_size = 384
+    xy_halo = 64
+    z_size = 20
+    z_halo = 6
+    num_slices = z_size + 2 * z_halo
+    # label the first num_slices slices
+    segmentation_files = [os.path.join('segmentations', 'segmentation%d.hdf5' % sliceidx) for sliceidx in range(num_slices)]
+    for sliceidx in range(num_slices):
         output = segmentation_files[sliceidx]
         if not os.path.exists(output):
             runner.start([os.path.join('..', 'CubeDicing', 'segment_image_bsub.sh'),
@@ -42,13 +48,15 @@ if __name__ == '__main__':
     # dice out two cubes
     if not os.path.exists(os.path.join('dicedblocks', 'block1.hdf5')):
         runner.start([os.path.join('..', 'CubeDicing', 'dice_block_bsub.sh'),
-                      '80', '80',
-                      '520', '520'] + segmentation_files +
+                      1, 1,
+                      xy_size + 2 * xy_halo, xy_size + 2 * xy_halo,
+                      ] + segmentation_files +
                      [os.path.join('dicedblocks', 'block1.hdf5')])
     if not os.path.exists(os.path.join('dicedblocks', 'block2.hdf5')):
         runner.start([os.path.join('..', 'CubeDicing', 'dice_block_bsub.sh'),
-                      '480', '80',
-                      '920', '520'] + segmentation_files +
+                      xy_size + 1, 1,
+                      2 * xy_size + 2 * xy_halo, xy_size + 2 * xy_halo,
+                      ] + segmentation_files +
                      [os.path.join('dicedblocks', 'block2.hdf5')])
     runner.wait_all()
 
@@ -64,7 +72,7 @@ if __name__ == '__main__':
     runner.start([os.path.join('..', 'PairwiseMatching', 'pairwise_match_labels_bsub.sh'),
                   os.path.join('fusedblocks', 'fused1.hdf5'),
                   os.path.join('fusedblocks', 'fused2.hdf5'),
-                  '1', '20',
+                  '1', xy_halo,
                   os.path.join('matchedblocks', 'matchedblock1.hdf5'),
                   os.path.join('matchedblocks', 'matchedblock2.hdf5')])
     runner.wait_all()

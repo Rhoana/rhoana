@@ -64,8 +64,6 @@ should_join = ((overlap_counts > auto_join_pixels) | ...
                  ((overlap_counts > (minoverlap_dual_ratio * packed1_total_areas)) & ...
                   (overlap_counts > (minoverlap_dual_ratio * packed2_total_areas))))));
 
-save('temp.mat', 'should_join', 'overlap_counts', 'packed1', 'packed2');
-
 % These joins will be processed at the end
 to_join = [];
 
@@ -78,6 +76,8 @@ for ix = 1:length(r),
        to_join = [to_join; [label1, label2]]
     end
 end
+
+save('temp.mat', 'should_join', 'overlap_counts', 'packed1', 'packed2', 'block1_overlap', 'to_join');
 
 % Deal with overlapping but not joined regions
 if direction == 1,
@@ -119,9 +119,12 @@ copyfile(block2, temp2);
 if length(to_join) > 0,
   try,
     old_joins = h5read(temp1, '/joins');
-    h5write(temp1, '/joins', [old_joins; to_join]);
+    new_joins = [old_joins; to_join];
+    h5write(temp1, '/joins', new_joins, [1, 1], size(new_joins));
   catch,
-    h5write(temp1, '/joins', to_join);
+    disp('(no joins existed)');
+    h5create(temp1, '/joins', [Inf, 2], 'Datatype', 'uint64', 'Chunksize', [32, 2]);
+    h5write(temp1, '/joins', to_join, [1, 1], size(to_join));
   end
 end
 
