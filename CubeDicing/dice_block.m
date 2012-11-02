@@ -21,10 +21,14 @@ num_slices = length(varargin) - 5;
 xsize = xmax - xmin + 1;
 ysize = ymax - ymin + 1;
 
+% avoid writing partial files
+temp_file_path = [out_file_path, '_partial'];
+
 % Save out subset of segmentations
-if ~exist(out_file_path, 'file'),
-  h5create(out_file_path, '/cubesegs', [Inf, Inf, Inf, Inf], 'DataType', 'uint8', 'ChunkSize', [64, 64, 4, 10], 'Deflate', 9, 'Shuffle', true);
+if exist(temp_file_path, 'file'),
+  delete(temp_file_path);
 end
+h5create(temp_file_path, '/cubesegs', [Inf, Inf, Inf, Inf], 'DataType', 'uint8', 'ChunkSize', [64, 64, 4, 10], 'Deflate', 9, 'Shuffle', true);
 
 fprintf(1, ['dice_block starting. ', num2str(num_slices), ' slices.\n']);
 
@@ -32,9 +36,10 @@ for i=1:num_slices,
   dat = h5read(varargin{4 + i}, '/segs', [xmin, ymin, 1], [xsize, ysize, Inf]);
   [xs, ys, ss] = size(dat);
   dat = reshape(dat, [xs, ys, 1, ss]);
-  h5write(out_file_path, '/cubesegs', dat, [1, 1, i, 1], [xs, ys, 1, ss]);
+  h5write(temp_file_path, '/cubesegs', dat, [1, 1, i, 1], [xs, ys, 1, ss]);
 end
 
+movefile(temp_file_path, out_file_path);
 fprintf(1, 'dice_block successfuly wrote to file: %s.\n', out_file_path);
 
 return;
