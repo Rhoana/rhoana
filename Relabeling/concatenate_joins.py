@@ -15,8 +15,9 @@ if __name__ == '__main__':
         else:
             print "no joins in", filename
 
-    ds = outf.create_dataset('joins', outjoins.shape, outjoins.dtype)
-    ds[...] = outjoins
+    if outjoins.shape[1] > 0:
+        ds = outf.create_dataset('joins', outjoins.shape, outjoins.dtype)
+        ds[...] = outjoins
     outf.close()
 
     shutil.move(sys.argv[-1] + '_partial', sys.argv[-1])

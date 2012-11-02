@@ -96,14 +96,14 @@ class PairwiseMatching(Job):
              str(self.halo_width)] + list(self.output)
 
 class JoinConcatenation(Job):
-    def __init__(self, outfilename, *args):
+    def __init__(self, outfilename, inputs):
         Job.__init__(self)
-        self.input_jobs = args
+        self.dependencies = inputs
         self.output = os.path.join('joins', outfilename)
 
     def command(self):
-        return ['./contatenate_joins.sh'] + \
-            [s.output for s in self.input_jobs] + \
+        return ['./concatenate_joins.sh'] + \
+            [s.output for s in self.dependencies] + \
             [self.output]
 
 if __name__ == '__main__':
@@ -157,14 +157,14 @@ if __name__ == '__main__':
                                               xy_halo if direction < 2 else z_halo)
                         # we can safely overwrite because of nonoverlapping even/odd sets
                         fused_blocks[idx] = JobSplit(pw, 0)
-                        fused_blocks[idx] = JobSplit(pw, 1)
+                        fused_blocks[neighbor_idx] = JobSplit(pw, 1)
 
     # Contatenate the joins from all the blocks to a single file, for building
     # the global remap.  Work first on XY planes, to add some parallelism and
     # limit number of command arguments.
-    plane_join_lists = {}
-    for idxs, block in fused_blocks:
-        plane_joins_lists = plane_joins_lists.get(idxs[2], []) + [block]
+    plane_joins_lists = {}
+    for idxs, block in fused_blocks.iteritems():
+        plane_joins_lists[idxs[2]] = plane_joins_lists.get(idxs[2], []) + [block]
     plane_join_jobs = [JoinConcatenation('concatenate_Z_%d' % idx, plane_joins_lists[idx])
                        for idx in plane_joins_lists]
     full_join = JoinConcatenation('concatenate_full', plane_join_jobs)
