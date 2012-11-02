@@ -95,6 +95,17 @@ class PairwiseMatching(Job):
             [str(self.direction + 1), # matlab
              str(self.halo_width)] + list(self.output)
 
+class JoinConcatenation(Job):
+    def __init__(self, outfilename, *args):
+        Job.__init__(self)
+        self.input_jobs = args
+        self.output = os.path.join('joins', outfilename)
+
+    def command(self):
+        return ['./contatenate_joins.sh'] + \
+            [s.output for s in self.input_jobs] + \
+            [self.output]
+
 if __name__ == '__main__':
     image_size = 1024
     xy_size = 384
@@ -103,6 +114,7 @@ if __name__ == '__main__':
     z_halo = 6
 
     assert 'CONNECTOME' in os.environ
+    assert 'VIRTUAL_ENV' in os.environ
 
     # Label all slices
     segmentations = [SegmentedSlice(f, idx) for idx, f in
@@ -146,5 +158,15 @@ if __name__ == '__main__':
                         # we can safely overwrite because of nonoverlapping even/odd sets
                         fused_blocks[idx] = JobSplit(pw, 0)
                         fused_blocks[idx] = JobSplit(pw, 1)
+
+    # Contatenate the joins from all the blocks to a single file, for building
+    # the global remap.  Work first on XY planes, to add some parallelism and
+    # limit number of command arguments.
+    plane_join_lists = {}
+    for idxs, block in fused_blocks:
+        plane_joins_lists = plane_joins_lists.get(idxs[2], []) + [block]
+    plane_join_jobs = [JoinConcatenation('concatenate_Z_%d' % idx, plane_joins_lists[idx])
+                       for idx in plane_joins_lists]
+    full_join = JoinConcatenation('concatenate_full', plane_join_jobs)
 
     Job.run_all()
