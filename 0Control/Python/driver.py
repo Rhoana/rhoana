@@ -106,6 +106,27 @@ class JoinConcatenation(Job):
             [s.output for s in self.dependencies] + \
             [self.output]
 
+class GlobalRemap(Job):
+    def __init__(self, outfilename, joinjob):
+        Job.__init__(self)
+        self.dependencies = [joinjob]
+        self.joinfile = joinjob.output
+        self.output = os.path.join('joins', outfilename)
+
+    def command(self):
+        return ['./create_global_map.sh', self.joinfile, self.output]
+
+class RemapBlock(Job):
+    def __init__(self, blockjob, build_remap_job, indices):
+        Job.__init__(self)
+        self.dependencies = [blockjob, build_remap_job]
+        self.inputfile = blockjob.output
+        self.mapfile = build_remap_job.output
+        self.output = os.path.join('relabeledblocks', 'block_%d_%d_%d.hdf5' % indices)
+
+    def command(self):
+        return ['./remap_block.sh', self.inputfile, self.mapfile, self.output]
+
 if __name__ == '__main__':
     image_size = 1024
     xy_size = 384
@@ -168,5 +189,11 @@ if __name__ == '__main__':
     plane_join_jobs = [JoinConcatenation('concatenate_Z_%d' % idx, plane_joins_lists[idx])
                        for idx in plane_joins_lists]
     full_join = JoinConcatenation('concatenate_full', plane_join_jobs)
+
+    # build the global remap
+    remap = GlobalRemap('globalmap', full_join)
+
+    # and apply it to every block
+    remapped_blocks = [RelabelBlock(fb, remap, idx) for idx, fb in fused_blocks.iteritems()]
 
     Job.run_all()

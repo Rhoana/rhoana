@@ -14,6 +14,11 @@ if __name__ == '__main__':
             outjoins = np.hstack((outjoins, f['joins'][...]))
         else:
             print "no joins in", filename
+        if 'labels' in f:
+            # write an identity map for the labels
+            labels = np.unique(f['labels'][...])
+            labels = labels[labels > 0]
+            outjoins = np.hstack((outjoins, np.vstack((labels, labels))))
 
     if outjoins.shape[1] > 0:
         ds = outf.create_dataset('joins', outjoins.shape, outjoins.dtype)
