@@ -1,12 +1,14 @@
 import sys
 import os.path
 import os
+import subprocess
+import datetime
 
 class Job(object):
     all_jobs = []
 
     def __init__(self):
-        self.name = self.__class__.__name__ + str(len(Job.all_jobs))
+        self.name = self.__class__.__name__ + str(len(Job.all_jobs)) + '_' + datetime.datetime.now().isoformat()
         Job.all_jobs.append(self)
 
     def run(self):
@@ -64,14 +66,18 @@ class Block(Job):
         return ['./dice_block.sh'] + self.args + [s.output for s in self.dependencies] + [self.output]
 
 class FusedBlock(Job):
-    def __init__(self, block, indices):
+    def __init__(self, block, indices, global_block_number):
         Job.__init__(self)
         self.block = block
+        self.global_block_number = global_block_number
         self.dependencies = [block]
         self.output = os.path.join('fusedblocks', 'fusedblock_%d_%d_%d.hdf5' % indices)
 
     def command(self):
-        return ['./window_fusion.sh', self.block.output, self.output]
+        return ['./window_fusion.sh',
+                self.block.output,
+                str(self.global_block_number),
+                self.output]
 
 class PairwiseMatching(Job):
     def __init__(self, fusedblock1, fusedblock2, direction, even_or_odd, halo_width):
@@ -116,10 +122,10 @@ if __name__ == '__main__':
                 blocks[block_idx_x, block_idx_y, block_idx_z] = \
                     Block(segmentations[lo_slice:hi_slice],
                           (block_idx_x, block_idx_y, block_idx_z),
-                          (xlo + 1, ylo + 1, xhi + 1, yhi + 1))  # matlab indexing
+                          xlo + 1, ylo + 1, xhi + 1, yhi + 1)  # matlab indexing
 
     # Window fuse all blocks
-    fused_blocks = dict((idxs, FusedBlock(block, idxs)) for idxs, block in blocks.iteritems())
+    fused_blocks = dict((idxs, FusedBlock(block, idxs, num)) for num, (idxs, block) in enumerate(blocks.iteritems()))
 
     # Pairwise match all blocks.
     #
