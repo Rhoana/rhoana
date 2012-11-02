@@ -1,4 +1,5 @@
 #!/bin/bash
+set -e
 echo "Dicing" $*
 
 ARGS=$(printf ",'%s'" $* | cut -c2-)

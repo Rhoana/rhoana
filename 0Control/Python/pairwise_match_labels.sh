@@ -1,4 +1,5 @@
 #!/bin/bash
+set -e
 echo "Pairwise matching" $*
 
 ARGS=$(printf ",'%s'" $* | cut -c2-)
