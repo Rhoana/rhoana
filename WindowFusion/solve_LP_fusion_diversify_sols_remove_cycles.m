@@ -160,6 +160,7 @@ cplex_obj.Model.ub    = ones(n_total_variables,1);
 % cplex_obj.DisplayFunc= [];
 
 cplex_obj.Param.clocktype.Cur = 2;
+cplex_obj.Param.threads.Cur = 1;
 cplex_obj.Param.timelimit.Cur = solv_options.time_limit; %1 hour
 % cplex_obj.Param.timelimit.Cur = 60; %1 hour
 
