@@ -194,6 +194,6 @@ if __name__ == '__main__':
     remap = GlobalRemap('globalmap', full_join)
 
     # and apply it to every block
-    remapped_blocks = [RelabelBlock(fb, remap, idx) for idx, fb in fused_blocks.iteritems()]
+    remapped_blocks = [RemapBlock(fb, remap, idx) for idx, fb in fused_blocks.iteritems()]
 
     Job.run_all()
