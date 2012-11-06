@@ -87,7 +87,10 @@ tess_pars.tess_smallest_seg_area_proportion_for_region_filling  = 8;
 
 t_fusion_total = tic;
 
-i_thin_hard_bdries = hdf5read(input_seg_hdf5, '/cubesegs');
+% Read in the segmentations
+% Fusion expects logicals with 1 for boundary and 0 for non-boundary pixels
+
+i_thin_hard_bdries = hdf5read(input_seg_hdf5, '/cubesegs') < 1;
 
 n_frames_to_process  = size(i_thin_hard_bdries, 3);
 
