@@ -30,28 +30,50 @@ if ~exist(forest_file_path, 'file')
 end
 
 
+
 %Open the input image
 input_image = imread(image_file_path);
 
-
+%Enhance contrast (globally)
+input_image = imadjust(input_image);
 
 %Load the forest settings
 load(forest_file_path,'forest');
 
 
+
 % Segmentation settings (there are more settings in
 % generateMembraneProbabilities and gapCompletion)
-threshRange = [0.26:0.01:0.5];
-l_s_range = 0.6;
-l_gc_range = 0.1;
-%maxSegi = length(threshRange) * length(l_s_range) * length(l_gc_range);
+
+%Original settings
+%threshRange = 0.2:0.01:0.5;
+%l_s_range = 0.6;
+%l_gc_range = 0.1;
+
+%Dual settings: use 30 threshold and 30 gap completion segmentations
+%(a linear combination of both might be even better)
+%Threshold
+threshRangeA = 0.21:0.01:0.5;
+l_s_rangeA = 0.6;
+l_gc_rangeA = 0.1;
+
+%Gap completion
+threshRangeB = 0.5;
+l_s_rangeB = 0.2;
+l_gc_rangeB = 0.05:0.05:1.5;
 
 
 % Generate features and calculate membrane probabilities
 imProb = generateMembraneProbabilities(input_image, forest);
 
 % Do gap completion and generate segmentations
-segs = gapCompletion(input_image, imProb, threshRange, l_s_range, l_gc_range);
+%Single mode
+%segs = gapCompletion(input_image, imProb, threshRange, l_s_range, l_gc_range);
+%Dual mode
+segs = cat(3, ...
+    gapCompletion(input_image, imProb, threshRangeA, l_s_rangeA, l_gc_rangeA), ...
+    gapCompletion(input_image, imProb, threshRangeB, l_s_rangeB, l_gc_rangeB));
+
 
 %Convert
 segs = uint8(segs) * 255;
