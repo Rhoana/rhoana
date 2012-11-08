@@ -1,6 +1,7 @@
 dataset_dir = 'C:\dev\datasets\conn\main_dataset\';
 %subvol_name = 'ac3train';
-subvol_name = 'ac3test';
+%subvol_name = 'ac3test';
+subvol_name = 'ac4full_ds2';
 src_dir = fullfile(dataset_dir, subvol_name);
 %src_dir = 'C:\dev\datasets\conn\main_dataset\ac4full_ds2\';
 %src_dir = 'C:\dev\datasets\conn\main_dataset\ac3train\';
@@ -10,7 +11,7 @@ dice_string = 'diced_xy=512_z=32_xyOv=128_zOv=12_dwnSmp=1';
 %result_name = 'res_from_sept_30_minotrC_PF';
 result_name = 'res_from_0ct02_PF';
 
-nresult = 4;
+nresult = 1;
 
 %if exist('src_vol', 'var')
 %    fprintf(1, 'Reusing volumes.\n');
