@@ -46,8 +46,11 @@ space_time_seg_area_loss_limit   = 0.2;
 
 size_compensation_factor         = 0.975;%1;%0.9;%0.95;%0.7; %0.085
 link_n_costs                     = 3;
-link_max_ovlap_thresh_range      = [0.8 0.9 0.999];%linspace(0.87, 0.999, link_n_costs); % 0.8 is conservative
-link_min_ovlap_thresh_range      = 0.05 * ones(1,link_n_costs);
+%link_max_ovlap_thresh_range      = [0.8 0.9 0.999];%linspace(0.87, 0.999, link_n_costs); % 0.8 is conservative
+%link_min_ovlap_thresh_range      = 0.05 * ones(1,link_n_costs);
+link_max_ovlap_thresh_range      = [0.9 0.95 0.99];
+link_min_ovlap_thresh_range      = [0.35 0.4 0.45];
+
 
 do_not_connect_theta             = 0.2;
 n_max_branches                   = Inf;
@@ -84,7 +87,10 @@ tess_pars.tess_smallest_seg_area_proportion_for_region_filling  = 8;
 
 t_fusion_total = tic;
 
-i_thin_hard_bdries = hdf5read(input_seg_hdf5, '/cubesegs');
+% Read in the segmentations
+% Fusion expects logicals with 1 for boundary and 0 for non-boundary pixels
+
+i_thin_hard_bdries = hdf5read(input_seg_hdf5, '/cubesegs') < 1;
 
 n_frames_to_process  = size(i_thin_hard_bdries, 3);
 
