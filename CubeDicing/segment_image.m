@@ -1,4 +1,4 @@
-function segment_image(varargin)
+function segment_image(input_path, out_file_path)
 
 % Usage:
 % segment_image probability_file_in out_file_path
@@ -10,19 +10,8 @@ function segment_image(varargin)
 d = fileparts(which(mfilename));
 addpath(genpath(fullfile(d, '..', 'lib', 'segmentation')));
 
-% Check for errors
-if length(varargin) ~= 2
-    arg_error();
-end
 
 fprintf(1, 'segment_image starting\n');
-
-input_path = varargin{1};
-out_file_path = varargin{2};
-
-if ~exist(image_file_path, 'file')
-    file_error(image_file_path);
-end
 
 % Generate features and calculate membrane probabilities
 imProb = h5read(input_path, '/improb');
@@ -84,10 +73,3 @@ function arg_error
 disp('Usage: segment_image image_file_path forest_file_path out_file_path');
 error('Input argument error.');
 end
-
-function file_error(filename)
-disp('Usage: segment_image image_file_path forest_file_path out_file_path');
-disp(['Error: Input file does not exist: ' filename]);
-error('File not found error.');
-end
-
