@@ -1,43 +1,31 @@
 function segment_image(varargin)
 
 % Usage:
-% segment_image image_file_path forest_file_path out_file_path
+% segment_image probability_file_in out_file_path
 
-% Segments the input image using the given random forest and predefined features
-% Outputs the resulting probabilities and segmentations to out_file_path as an hdf5 file
+% Segments the input boundary probability image stored in an hdf5 file.
+% Outputs the resulting segmentations to out_file_path as an hdf5 file
 
 %Add the Segmentation lib folder to the path
 d = fileparts(which(mfilename));
 addpath(genpath(fullfile(d, '..', 'lib', 'segmentation')));
 
 % Check for errors
-if length(varargin) ~= 3
+if length(varargin) ~= 2
     arg_error();
 end
 
 fprintf(1, 'segment_image starting\n');
 
-image_file_path = varargin{1};
-forest_file_path = varargin{2};
-out_file_path = varargin{3};
+input_path = varargin{1};
+out_file_path = varargin{2};
 
 if ~exist(image_file_path, 'file')
     file_error(image_file_path);
 end
 
-if ~exist(forest_file_path, 'file')
-    file_error(forest_file_path);
-end
-
-
-%Open the input image
-input_image = imread(image_file_path);
-
-
-
-%Load the forest settings
-load(forest_file_path,'forest');
-
+% Generate features and calculate membrane probabilities
+imProb = h5read(input_path, '/improb');
 
 % Segmentation settings (there are more settings in
 % generateMembraneProbabilities and gapCompletion)
@@ -45,10 +33,6 @@ threshRange = [0.26:0.01:0.5];
 l_s_range = 0.6;
 l_gc_range = 0.1;
 %maxSegi = length(threshRange) * length(l_s_range) * length(l_gc_range);
-
-
-% Generate features and calculate membrane probabilities
-imProb = generateMembraneProbabilities(input_image, forest);
 
 % Do gap completion and generate segmentations
 segs = gapCompletion(input_image, imProb, threshRange, l_s_range, l_gc_range);
@@ -63,10 +47,8 @@ temp_file_path = [out_file_path, '_partial'];
 if exist(temp_file_path, 'file'),
   delete(temp_file_path);
 end
-h5create(temp_file_path, '/improb', [Inf, Inf], 'DataType', 'double', 'ChunkSize', [64,64], 'Deflate', 9, 'Shuffle', true);
 h5create(temp_file_path, '/segs', [Inf, Inf, Inf], 'DataType', 'uint8', 'ChunkSize', [64,64,10], 'Deflate', 9);
 
-h5write(temp_file_path, '/improb', imProb, [1, 1], size(imProb));
 h5write(temp_file_path, '/segs', segs, [1, 1, 1], size(segs));
 
 movefile(temp_file_path, out_file_path);
