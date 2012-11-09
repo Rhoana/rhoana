@@ -34,6 +34,9 @@ end
 %Open the input image
 input_image = imread(image_file_path);
 
+%Enhance contrast (globally)
+input_image = imadjust(input_image);
+
 %Load the forest settings
 load(forest_file_path,'forest');
 

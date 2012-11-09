@@ -8,7 +8,7 @@ ms = 3; %3;
 
 %fixed for probability map
 mem = 1;%0;
-m_std = 1.1;%1.0;
+m_std = 1.1;%1.5;%1.0;
 
 imGray = norm01(adapthisteq(imGray));
 

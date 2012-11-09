@@ -44,13 +44,27 @@ flow_disp_filt.std_deviation  = 6;
 flg_size_calibration             = true;
 space_time_seg_area_loss_limit   = 0.2;
 
-size_compensation_factor         = 0.975;%1;%0.9;%0.95;%0.7; %0.085
-link_n_costs                     = 3;
-%link_max_ovlap_thresh_range      = [0.8 0.9 0.999];%linspace(0.87, 0.999, link_n_costs); % 0.8 is conservative
-%link_min_ovlap_thresh_range      = 0.05 * ones(1,link_n_costs);
-link_max_ovlap_thresh_range      = [0.9 0.95 0.99];
-link_min_ovlap_thresh_range      = [0.35 0.4 0.45];
+% size_compensation_factor
+% 0.975 was the best for ac3 but joins too much on the 5k cube
+% 0.9 is ok on the 5k cube
+% 0.8 will reduce merge errors in favour of split errors (for Omni etc)
+size_compensation_factor         = 0.9;
 
+% These settings are for branching: 
+% link_n_costs: number of branching settings to try
+% link_max_ovlap_thresh_range: overlap proportion threshold(s) for branch with larger overlap
+% link_min_ovlap_thresh_range: overlap proportion threshold(s) for branch with smaller overlap
+% Settings to disable branching
+link_n_costs                     = 0;
+link_max_ovlap_thresh_range      = [];
+link_min_ovlap_thresh_range      = [];
+% Settings for calculating three branching solutions
+%link_n_costs                     = 3;
+%link_max_ovlap_thresh_range      = [0.9 0.95 0.99];
+% Values below work well for ac3 but join too much for the 5k cube
+%link_min_ovlap_thresh_range      = [0.15 0.2 0.25];
+% Values below will join less and might provide reasonable results for the 5k cube (untested)
+%link_min_ovlap_thresh_range      = [0.35 0.4 0.45];
 
 do_not_connect_theta             = 0.2;
 n_max_branches                   = Inf;
@@ -298,29 +312,30 @@ for solution_ix = 1:n_solutions
         tess_pars.tess_smallest_seg_area_proportion_for_region_filling, ...
         solutions_LP_fusion.link_costs{solution_ix});
 end
-disp(['Done with building the stacks of image results in ' secs2hms(toc)]);
 
-%%
-disp(' '); tic;
-disp('Saving independent solutions.');
-
-
-disp('We build the fusion cube matrix and save it to disk ...'); tic
-[spt_M, i_s_L_sppst, cliques_per_solution] = ...
-    build_spt_M_cube_no_clique_props(i_s_L_solutions, i_stacks.i_s_L_sppst);
-
-
-n_cliques_per_solution = cellfun(@(x) numel(x), cliques_per_solution);
-n_solutions            = numel(cliques_per_solution);
-disp(['Done with building and saving the cube matrix in ' secs2hms(toc)]);
-
-t_clique_stats = tic;
-disp('Computing clique stats');
-
-clique_stats_cube  = get_cube_clique_stats(spt_M, i_s_L_sppst);
-disp(['Done with clique stats in ' secs2hms(toc(t_clique_stats))]);
-
-raw_obj_vals = solutions_LP_fusion.raw_obj_vals;
+% disp(['Done with building the stacks of image results in ' secs2hms(toc)]);
+% 
+% %%
+% disp(' '); tic;
+% disp('Saving independent solutions.');
+% 
+% 
+% disp('We build the fusion cube matrix and save it to disk ...'); tic
+% [spt_M, i_s_L_sppst, cliques_per_solution] = ...
+%     build_spt_M_cube_no_clique_props(i_s_L_solutions, i_stacks.i_s_L_sppst);
+% 
+% 
+% n_cliques_per_solution = cellfun(@(x) numel(x), cliques_per_solution);
+% n_solutions            = numel(cliques_per_solution);
+% disp(['Done with building and saving the cube matrix in ' secs2hms(toc)]);
+% 
+% t_clique_stats = tic;
+% disp('Computing clique stats');
+% 
+% clique_stats_cube  = get_cube_clique_stats(spt_M, i_s_L_sppst);
+% disp(['Done with clique stats in ' secs2hms(toc(t_clique_stats))]);
+% 
+% raw_obj_vals = solutions_LP_fusion.raw_obj_vals;
 
 % save(output_mat, ...
 %       'n_solutions', ...
@@ -351,9 +366,9 @@ raw_obj_vals = solutions_LP_fusion.raw_obj_vals;
 %%  
 
 % Map to dense volume and add global block idx in high bits (but only in nonzero labels)
-labeled_volume = uint64(i_s_L_sppst);
+labeled_volume = uint64(i_s_L_solutions{1});
 nz = find(labeled_volume);
-labeled_volume(nz) = (uint64(2) ^ 32) * uint64(str2num(global_block_idx)) + uint64(full(spt_M(labeled_volume(nz))));
+labeled_volume(nz) = (uint64(2) ^ 32) * uint64(str2num(global_block_idx)) + uint64(labeled_volume(nz));
 
 % avoid writing partial files
 temp_hdf5 = [output_hdf5, '_partial'];

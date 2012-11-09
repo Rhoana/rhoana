@@ -1,7 +1,8 @@
 %function score = assess_segmentation_var_of_info(seg_folder_list, ref_folder)
  
-seg_prefix = 'C:\dev\datasets\conn\main_dataset\ac3train\diced_xy=256_z=16_xyOv=128_zOv=8_dwnSmp=1';
-%seg_prefix = 'C:\dev\datasets\conn\main_dataset\ac3train\diced_xy=512_z=32_xyOv=128_zOv=12_dwnSmp=1';
+%seg_prefix = 'C:\dev\datasets\conn\main_dataset\ac3train\diced_xy=256_z=16_xyOv=128_zOv=8_dwnSmp=1';
+%seg_prefix = 'C:\dev\datasets\conn\main_dataset\ac3train\diced_xy=384_z=36_xyOv=128_zOv=12_dwnSmp=1';
+seg_prefix = 'C:\dev\datasets\conn\main_dataset\ac3train\diced_xy=512_z=32_xyOv=128_zOv=12_dwnSmp=1';
 %seg_prefix = 'C:\dev\datasets\conn\main_dataset\ac3test\diced_xy=512_z=32_xyOv=128_zOv=12_dwnSmp=1';
 
 % result_list = {'res_from_sept_3_tuatara_25seg_PF', ...
@@ -19,7 +20,7 @@ seg_prefix = 'C:\dev\datasets\conn\main_dataset\ac3train\diced_xy=256_z=16_xyOv=
 %     'res_from_sept_14_scf095_PF', ...
 %     'res_from_sept_20_segGC30_PF'};
 
-% result_list = {...%'res_from_sept_14_seg60_scf0975_PF', ...
+%result_list = {...%'res_from_sept_14_seg60_scf0975_PF', ...
 %     ...'res_from_sept_28_otr899_PF', ...
 %     ...%'res_from_sept_28_nmb100_PF', ...
 %     ...%'res_from_sept_28_nmb10_PF', ...
@@ -30,9 +31,24 @@ seg_prefix = 'C:\dev\datasets\conn\main_dataset\ac3train\diced_xy=256_z=16_xyOv=
 %     ...%'res_from_ODY_sept_27_PF'
 %     };
 
+%Test (512)
 %result_list = {'res_from_0ct02_PF'};
+
+%Small dicing (256)
 %result_list = {'res_from_SmallDice_PF'};
-result_list = {'res_from_SmDi_J2_PF'};
+%result_list = {'res_from_SmDi_J2_PF'}; %More joining - works best on test 
+%result_list = {'res_from_SmDi_J1_scf085_PF'};
+%result_list = {'res_from_SmDi_J1_scf08_PF'};
+
+%Medium dicing (384)
+%result_list = {'res_from_MedDi_scf09_PF'};
+
+%Large dicing (512)
+result_list = {'res_from_sept_14_scf09_PF'};
+
+%Good Branching 512
+%result_list = {'res_from_ODY_sept_27_PF'};
+%result_list = {'res_from_sept_30_minotrC_PF'};
 
 % result_list = {'res_from_sept_14_scf095_mop0_PF', ...
 %     'res_from_sept_14_scf095_mop1000_PF', ...
