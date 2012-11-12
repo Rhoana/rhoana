@@ -132,44 +132,61 @@ if __name__ == '__main__':
     # compute all overlaps between multisegmentations
     ##################################################
     numsegs, depth, width, height = segmentations.shape
-    print segmentations.shape
 
     # ensure we can store all the labels we need to
-    assert (width * height * depth * numsegs) < (2 ** 32 - 1), \
-        "Cube too large.  Must be smaller than 2**32 - 1 voxels."
+    assert (width * height * depth * numsegs) < (2 ** 31 - 1), \
+        "Cube too large.  Must be smaller than 2**31 - 1 voxels."
 
     largest_index = depth * numsegs * width * height
 
     lpprob = LPProblem()
 
-    areas = defaultdict(int)
+    st = time.time()
 
+    # Precompute labels, store in HDF5
+    lf = h5py.File('temp.hdf5', 'w')
+    chunking = list(segmentations.shape)
+    chunking[0] = 1
+    chunking[1] = 1
+    labels = lf.create_dataset('labels', segmentations.shape, dtype=np.int64, chunks=tuple(chunking))
+
+    keys = []
+    counts = []
+    for D in range(depth)[:2]:
+        for Seg in range(numsegs):
+            labels[Seg, D, :, :] = lbls = unique_labels(D, Seg, segmentations[Seg, D, :, :][...])
+            k, c = pandas.lib.value_count_int64(lbls.ravel())
+            keys.append(k)
+            counts.append(c)
+    print unique_labels.total_time, "of", time.time() - st
+
+    labeltime = time.time() - st
     st = time.time()
 
     # Compute all the labels for all the slices, making each unique as necessary
     print "Computing segment-to-segment overlaps"
-    for D in range(depth)[:2]:
+    for D in range(depth):
         for Seg in range(numsegs):
-            print "Slice %d / %d, Segmentation %d / %d" % (D, depth, Seg, numsegs)
-            print unique_labels.total_time, "of", time.time() - st
-            print "Expected:", ((time.time() - st) * depth * numsegs) / (D * numsegs + Seg + 0.01)
-            labels1 = unique_labels(D, Seg, segmentations[Seg, D, :, :][...])
-            counts = pandas.lib.value_count_int64(labels1.ravel())
-            labels1 <<= 32
+            labels1 = labels[Seg, D, :, :][...]
+            print "Slice %d / %d, Segmentation %d / %d" % (D, depth, Seg, numsegs), time.time() - st + labeltime
+            print "Expected:", labeltime + ((time.time() - st) * depth * numsegs) / (D * numsegs + Seg + 0.01)
 
             l1flat = labels1.flat
             # all overlaps at this same depth
             for Seg2 in range(Seg + 1, numsegs):
-                labels2 = unique_labels(D, Seg2, segmentations[Seg2, D, :, :][...])
+                labels2 = labels[Seg2, D, :, :][...]
                 np.add(labels1, labels2, labels2)
-                counts = pandas.lib.value_count_int64(labels2.ravel())
+                k, c = pandas.lib.value_count_int64(labels2.ravel())
+                keys.append(k)
+                counts.append(c)
 
             # all overlaps at next depth
             if D < depth - 1:
                 for Seg2 in range(numsegs):
-                    labels2 = unique_labels(D + 1, Seg2, segmentations[Seg2, D + 1, :, :][...])
+                    labels2 = labels[Seg2, D + 1, :, :][...]
                     np.add(labels1, labels2, labels2)
-                    counts = pandas.lib.value_count_int64(labels2.ravel())
+                    k, c = pandas.lib.value_count_int64(labels2.ravel())
+                    keys.extend(k)
+                    counts.extend(c)
 
-
-            print "  %d segments, %d links" % (len(lpprob.segments), len(lpprob.links))
+            print "  %d entries" % (sum(len(k) for k in keys))
