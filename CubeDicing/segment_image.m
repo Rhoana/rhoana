@@ -1,5 +1,4 @@
-function segment_image(varargin)
-
+function segment_image(image_file_path, probs_file_path, out_file_path)
 % Usage:
 % segment_image image_file_in probability_file_in out_file_path
 
@@ -10,23 +9,15 @@ function segment_image(varargin)
 d = fileparts(which(mfilename));
 addpath(genpath(fullfile(d, '..', 'lib', 'segmentation')));
 
-% Check for errors
-if length(varargin) ~= 3
-    arg_error();
-end
-
-image_file_path = varargin{1};
-probs_file_path = varargin{2};
-out_file_path = varargin{3};
-
 if ~exist(image_file_path, 'file')
     file_error(image_file_path);
 end
 
 if ~exist(probs_file_path, 'file')
     file_error(forest_file_path);
-    fprintf(1, 'segment_image starting\n');
 end
+
+disp('segment_image starting\n');
 
 %Open the input image
 input_image = imread(image_file_path);
@@ -167,11 +158,6 @@ end
 
 
 %Helper functions
-
-function arg_error
-disp('Usage: segment_image image_file_path probs_file_path out_file_path');
-error('Input argument error.');
-end
 
 function file_error(filename)
 disp('Usage: segment_image image_file_path forest_file_path out_file_path');

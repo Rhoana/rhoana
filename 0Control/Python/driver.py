@@ -59,11 +59,12 @@ class SegmentedSlice(Job):
     def __init__(self, probability_image, index):
         Job.__init__(self)
         self.probability_image = probability_image.output
+        self.raw_image = probability_image.raw_image
         self.dependencies = [probability_image]
         self.output = os.path.join('segmentations', 'slice_%d.hdf5' % index)
 
     def command(self):
-        return ['./segment_image.sh', self.probability_image, self.output]
+        return ['./segment_image.sh', self.raw_image, self.probability_image, self.output]
 
 class Block(Job):
     def __init__(self, segmented_slices, indices, *args):
@@ -149,7 +150,7 @@ if __name__ == '__main__':
     assert 'VIRTUAL_ENV' in os.environ
 
     # Compute probabilities
-    probabilities = [Probabilities(f, idx) for idx, f in
+    probabilities = [ProbabilityMap(f, idx) for idx, f in
                      enumerate(f.rstrip() for f in open(sys.argv[1]))]
 
     # Label all slices
