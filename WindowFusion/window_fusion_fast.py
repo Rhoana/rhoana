@@ -7,6 +7,9 @@ import pulp
 import time
 from collections import Counter, defaultdict
 import pandas
+import pycpx
+import gc
+import operator
 
 
 ##################################################
@@ -14,15 +17,16 @@ import pandas
 ##################################################
 size_compensation_factor = 0.9
 
-
+# NB - both these functions should accept array arguments
 # weights for segments
 def segment_worth(area):
     return area ** size_compensation_factor
-
+# weights for links
 def link_worth(area1, area2, area_overlap):
-    min_area = min(area1, area2)
-    max_fraction = area_overlap / max(area1, area2)
+    min_area = np.minimum(area1, area2)
+    max_fraction = area_overlap / np.maximum(area1, area2)
     return max_fraction * (min_area ** size_compensation_factor)
+
 
 class timed(object):
     def __init__(self, f):
@@ -47,83 +51,123 @@ def unique_labels(depth, seg, values):
     max_label = max(max_label, labels.max())
     return labels
 
-class LPProblem(object):
-    def __init__(self):
-        self.segments = {}  # segment label number to pulp variable
-        self.links = {}  # pair of segment labels to pulp variable
-        self.up_links = {}  # segment label to list of link variables
-        self.down_links = {}  # segment label to list of link variables
-        self.lp = pulp.LpProblem("window_fusion", pulp.LpMaximize)
+def count_overlaps(depth, numsegs, labels):
+    areas = {}
+    exclusions = {}
+    overlaps = {}
+    for D in range(depth):
+        for Seg in range(numsegs):
+            lbls = labels[Seg, D, :, :][...]
+            keys, counts = pandas.lib.value_count_int64(lbls.ravel())
+            areas.update(zip(keys, counts))
+        print D
 
-    def add_overlaps(self, overlaps, same_depth=True):
-        nonzero_rows = list(set(overlaps.nonzero()[0]))
-        seg_areas = dict((r, overlaps[r, :].sum()) for r in nonzero_rows)
+    st = time.time()
 
-        # Create variables for each segment
-        for segidx in seg_areas:
-            self.add_segment(segidx, seg_areas[segidx])
+    # Compute all the labels for all the slices, making each unique as necessary
+    print "Computing segment-to-segment overlaps"
+    for D in range(depth):
+        print "Slice %d / %d" % (D, depth), time.time() - st
+        print "Expected:", ((time.time() - st) * depth * numsegs) / (D * numsegs + 0.01)
+        for Seg in range(numsegs):
+            labels1 = labels[Seg, D, :, :][...]
+            labels1 <<= 32
 
-        # Create links and/or constraints for each overlapping pair of segments
-        for seg1_idx in seg_areas:
-            if seg1_idx == 0:
-                continue
-            for seg2_idx in overlaps[seg1_idx, :].nonzero()[1]:
-                if seg2_idx == 0:
-                    continue
-                if not same_depth:
-                    self.add_link(seg1_idx, seg2_idx,
-                                  seg_areas[seg1_idx], seg_areas[seg2_idx],
-                                  overlaps[seg1_idx, seg2_idx])
-                else:
-                    self.add_exclusion(seg1_idx, seg2_idx)
+            l1flat = labels1.flat
+            # all overlaps at this same depth
+            for Seg2 in range(Seg + 1, numsegs):
+                labels2 = labels[Seg2, D, :, :][...]
+                np.add(labels1, labels2, labels2)
+                keys, counts = pandas.lib.value_count_int64(labels2.ravel())
+                exclusions.update(zip(keys, counts))
 
-    def add_segment(self, segidx, segarea):
-        if segidx in self.segments:
-            return
-        segvar = pulp.LpVariable('seg_%d' % segidx, cat=pulp.LpBinary)
-        self.segments[segidx] = segvar
+            # all overlaps at next depth
+            if D < depth - 1:
+                for Seg2 in range(numsegs):
+                    labels2 = labels[Seg2, D + 1, :, :][...]
+                    np.add(labels1, labels2, labels2)
+                    keys, counts = pandas.lib.value_count_int64(labels2.ravel())
+                    overlaps.update(zip(keys, counts))
 
-        # add segment to objective function
-        self.lp += segment_worth(segarea) * segvar
+    return areas, exclusions, overlaps
 
-    def add_link(self,
-                 seg1_idx, seg2_idx,
-                 seg1_area, seg2_area,
-                 overlap_area):
-        if (seg1_idx, seg2_idx) in self.links or \
-                (seg2_idx, seg1_idx) in self.links:
-            return
-        linkvar = pulp.LpVariable('link_%d_%d' % (seg1_idx, seg2_idx),
-                                 cat=pulp.LpBinary)
-        self.links[seg1_idx, seg2_idx] = linkvar
+def build_model(areas, exclusions, overlaps, bottom_segments):
+    ##################################################
+    # Generate the LP problem
+    ##################################################
+    print "Building problem:", len(areas), "segments,", len(exclusions), \
+        "exclusions,", len(overlaps), "overlaps, (all approx.)"
 
-        # add link to objective function
-        self.lp += link_worth(seg1_area, seg2_area, overlap_area) * linkvar
+    st = time.time()
 
-        if seg1_idx < seg2_idx:
-            self.up_links[seg1_idx] = self.up_links.get(seg1_idx, []) + [linkvar]
-            self.down_links[seg2_idx] = self.down_links.get(seg2_idx, []) + [linkvar]
-        else:
-            self.down_links[seg1_idx] = self.down_links.get(seg1_idx, []) + [linkvar]
-            self.up_links[seg2_idx] = self.up_links.get(seg2_idx, []) + [linkvar]
+    # Find all segments and sizes
+    segments, segment_areas = zip(*sorted(areas.items()))
+    segments = np.array(segments)
+    segment_areas = np.array(segment_areas, dtype=float)
 
-        # XXX - if branching is turned on, we need a constraint that makes sure
-        # both segments are activated if the link is activated
+    # sanity checking - check all segments present
+    assert np.all((segments[1:] - segments[:-1]) == 1)
+    # needed for indexing
+    assert segments[0] == 0
 
-    def add_exclusion(self, seg1_idx, seg2_idx):
-        # keep both segments from being activated at the same time
-        self.lp += (self.segments[seg1_idx] + self.segments[seg2_idx]) <= 1
+    # Find all overlaps and overlap sizes
+    links = np.array(overlaps.keys())
+    link_areas = np.array(overlaps.values(), dtype=float)
 
-    def add_non_branching_constraints(self):
-        # Every link is between two segment indexes.  We can tell which
-        # direction (up or down) based on which segment index is lower.
+    # find the segment indices for the links
+    link_1st_segidx = (links >> 32)
+    link_2nd_segidx = (links & 0xffffffff)
+    # Filter links to/from background pixels
+    mask = (link_1st_segidx > 0) & (link_2nd_segidx > 0)
+    link_1st_segidx = link_1st_segidx[mask]
+    link_2nd_segidx = link_2nd_segidx[mask]
+    link_areas = link_areas[mask]
+    # fetch areas
+    link_1st_area = segment_areas[link_1st_segidx]
+    link_2nd_area = segment_areas[link_2nd_segidx]
 
-        # every set of links can have only one active
-        for segidx, links in self.up_links.iteritems():
-            self.lp += pulp.LpAffineExpression(links) <= 1
-        for segidx, links in self.down_links.iteritems():
-            self.lp += pulp.LpAffineExpression(links) <= 1
+    # Build the LP
+    model = pycpx.CPlexModel(verbosity=3)
 
+    # Create variables for the segments and links
+    segment_vars = model.new(len(segments), vtype='binary')
+    link_vars = model.new(len(link_1st_segidx), vtype='binary')
+
+    # set up the objective
+    objective = segment_vars.mult(segment_worth(segment_areas)).sum() + \
+        link_vars.mult(link_worth(link_1st_area, link_2nd_area, link_areas)).sum()
+
+    print "overlap constraints", len(exclusions)
+    # add overlap exclusion constraints
+    for pair in exclusions:
+        # can't be np.int64 if we're indexing CPlexModel variables
+        idx1 = int(pair >> 32)
+        idx2 = int(pair & 0xffffffff)
+        if idx1 and idx2:
+            model.constrain(segment_vars[idx1, 0] + segment_vars[idx2, 0] <= 1)
+
+    print "link constraints", len(link_1st_segidx)
+    # add link constraints:
+    # - no more than one link to any single segment active.
+    # - if a link is active, the segment must be active.
+    uplinks = {}
+    downlinks = {}
+    for linkidx, segidx in enumerate(link_1st_segidx):
+        uplinks[segidx] = uplinks.get(segidx, []) + [linkidx]
+    for linkidx, segidx in enumerate(link_2nd_segidx):
+        downlinks[segidx] = downlinks.get(segidx, []) + [linkidx]
+    for segidx, links in uplinks.iteritems():
+        model.constrain(segment_vars[int(segidx), 0] >= sum(link_vars[l] for l in links))
+    for segidx, links in downlinks.iteritems():
+        model.constrain(segment_vars[int(segidx), 0] >= sum(link_vars[l] for l in links))
+
+    # Initial solution is all finest segmentations activated
+    import pdb
+    pdb.set_trace()
+    starting_dict = dict((s, 0) for s in segment_vars)
+    starting_dict.update((l, 0) for l in link_vars)
+    starting_dict.update((segment_vars[int(sidx), 0], 1) for sidx in bottom_segments if sidx > 0)
+    return model, objective, starting_dict
 
 if __name__ == '__main__':
     segmentations = h5py.File(sys.argv[1])['cubesegs']
@@ -139,8 +183,6 @@ if __name__ == '__main__':
 
     largest_index = depth * numsegs * width * height
 
-    lpprob = LPProblem()
-
     st = time.time()
 
     # Precompute labels, store in HDF5
@@ -149,44 +191,17 @@ if __name__ == '__main__':
     chunking[0] = 1
     chunking[1] = 1
     labels = lf.create_dataset('labels', segmentations.shape, dtype=np.int64, chunks=tuple(chunking))
-
-    keys = []
-    counts = []
-    for D in range(depth)[:2]:
-        for Seg in range(numsegs):
-            labels[Seg, D, :, :] = lbls = unique_labels(D, Seg, segmentations[Seg, D, :, :][...])
-            k, c = pandas.lib.value_count_int64(lbls.ravel())
-            keys.append(k)
-            counts.append(c)
-    print unique_labels.total_time, "of", time.time() - st
-
-    labeltime = time.time() - st
-    st = time.time()
-
-    # Compute all the labels for all the slices, making each unique as necessary
-    print "Computing segment-to-segment overlaps"
     for D in range(depth):
         for Seg in range(numsegs):
-            labels1 = labels[Seg, D, :, :][...]
-            print "Slice %d / %d, Segmentation %d / %d" % (D, depth, Seg, numsegs), time.time() - st + labeltime
-            print "Expected:", labeltime + ((time.time() - st) * depth * numsegs) / (D * numsegs + Seg + 0.01)
+            labels[Seg, D, :, :] = unique_labels(D, Seg, segmentations[Seg, D, :, :][...])
 
-            l1flat = labels1.flat
-            # all overlaps at this same depth
-            for Seg2 in range(Seg + 1, numsegs):
-                labels2 = labels[Seg2, D, :, :][...]
-                np.add(labels1, labels2, labels2)
-                k, c = pandas.lib.value_count_int64(labels2.ravel())
-                keys.append(k)
-                counts.append(c)
+    areas, exclusions, overlaps = count_overlaps(depth, numsegs, labels)
 
-            # all overlaps at next depth
-            if D < depth - 1:
-                for Seg2 in range(numsegs):
-                    labels2 = labels[Seg2, D + 1, :, :][...]
-                    np.add(labels1, labels2, labels2)
-                    k, c = pandas.lib.value_count_int64(labels2.ravel())
-                    keys.extend(k)
-                    counts.extend(c)
+    bottom_segments = reduce(operator.ior, [set(labels[0, D, :, :].flat) for D in range(depth)])
+    model, objective, start = build_model(areas, exclusions, overlaps, bottom_segments)
+    # free memory
+    areas = exclusions = overlaps = None
+    gc.collect()
 
-            print "  %d entries" % (sum(len(k) for k in keys))
+    print "solving"
+    model.maximize(objective, starting_dict=start)
