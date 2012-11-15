@@ -1,15 +1,14 @@
+import os
 import sys
-import h5py
-import numpy as np
-from scipy.ndimage.measurements import label
-from scipy.sparse import csr_matrix, csc_matrix, coo_matrix
-import pulp
 import time
-from collections import Counter, defaultdict
-import pandas
-import pycpx
 import gc
 import operator
+
+import numpy as np
+from scipy.ndimage.measurements import label
+import h5py
+import pandas
+import pycpx
 
 
 ##################################################
@@ -55,20 +54,20 @@ def count_overlaps(depth, numsegs, labels):
     areas = {}
     exclusions = {}
     overlaps = {}
+
+    st = time.time()
     for D in range(depth):
         for Seg in range(numsegs):
             lbls = labels[Seg, D, :, :][...]
             keys, counts = pandas.lib.value_count_int64(lbls.ravel())
             areas.update(zip(keys, counts))
-        print D
+    print "Labeling took", int(time.time() - st), "seconds"
 
     st = time.time()
 
     # Compute all the labels for all the slices, making each unique as necessary
-    print "Computing segment-to-segment overlaps"
+    print "Computing segment-to-segment overlaps (%d slices, %d multisegmentations)" % (depth, numsegs)
     for D in range(depth):
-        print "Slice %d / %d" % (D, depth), time.time() - st
-        print "Expected:", ((time.time() - st) * depth * numsegs) / (D * numsegs + 0.01)
         for Seg in range(numsegs):
             labels1 = labels[Seg, D, :, :][...]
             labels1 <<= 32
@@ -88,6 +87,7 @@ def count_overlaps(depth, numsegs, labels):
                     np.add(labels1, labels2, labels2)
                     keys, counts = pandas.lib.value_count_int64(labels2.ravel())
                     overlaps.update(zip(keys, counts))
+    print "Overlaps took", int(time.time() - st), "seconds"
 
     return areas, exclusions, overlaps
 
@@ -95,8 +95,7 @@ def build_model(areas, exclusions, overlaps, bottom_segments):
     ##################################################
     # Generate the LP problem
     ##################################################
-    print "Building problem:", len(areas), "segments,", len(exclusions), \
-        "exclusions,", len(overlaps), "overlaps, (all approx.)"
+    print "Building MILP problem:"
 
     st = time.time()
 
@@ -129,6 +128,8 @@ def build_model(areas, exclusions, overlaps, bottom_segments):
     # Build the LP
     model = pycpx.CPlexModel(verbosity=3)
 
+    print "  segments", len(segments)
+    print "  links", len(link_1st_segidx)
     # Create variables for the segments and links
     segment_vars = model.new(len(segments), vtype='binary')
     link_vars = model.new(len(link_1st_segidx), vtype='binary')
@@ -137,7 +138,7 @@ def build_model(areas, exclusions, overlaps, bottom_segments):
     objective = segment_vars.mult(segment_worth(segment_areas)).sum() + \
         link_vars.mult(link_worth(link_1st_area, link_2nd_area, link_areas)).sum()
 
-    print "overlap constraints", len(exclusions)
+    print "  overlap constraints", len(exclusions)
     # add overlap exclusion constraints
     for pair in exclusions:
         # can't be np.int64 if we're indexing CPlexModel variables
@@ -146,7 +147,7 @@ def build_model(areas, exclusions, overlaps, bottom_segments):
         if idx1 and idx2:
             model.constrain(segment_vars[idx1, 0] + segment_vars[idx2, 0] <= 1)
 
-    print "link constraints", len(link_1st_segidx)
+    print "  link constraints", len(link_1st_segidx)
     # add link constraints:
     # - no more than one link to any single segment active.
     # - if a link is active, the segment must be active.
@@ -162,12 +163,11 @@ def build_model(areas, exclusions, overlaps, bottom_segments):
         model.constrain(segment_vars[int(segidx), 0] >= sum(link_vars[l] for l in links))
 
     # Initial solution is all finest segmentations activated
-    import pdb
-    pdb.set_trace()
-    starting_dict = dict((s, 0) for s in segment_vars)
-    starting_dict.update((l, 0) for l in link_vars)
-    starting_dict.update((segment_vars[int(sidx), 0], 1) for sidx in bottom_segments if sidx > 0)
-    return model, objective, starting_dict
+    initial_segment_values = np.zeros(segment_vars.shape, dtype=int)
+    initial_segment_values[list(bottom_segments)] = 1
+    initial_link_values = np.zeros(link_vars.shape, dtype=int)
+    starting_dict = {segment_vars : initial_segment_values, link_vars : initial_link_values}
+    return model, objective, starting_dict, segment_vars, link_vars, np.vstack((link_1st_segidx, link_2nd_segidx)).T
 
 if __name__ == '__main__':
     segmentations = h5py.File(sys.argv[1])['cubesegs']
@@ -186,7 +186,7 @@ if __name__ == '__main__':
     st = time.time()
 
     # Precompute labels, store in HDF5
-    lf = h5py.File('temp.hdf5', 'w')
+    lf = h5py.File(sys.argv[2] + '_partial', 'w')
     chunking = list(segmentations.shape)
     chunking[0] = 1
     chunking[1] = 1
@@ -197,11 +197,53 @@ if __name__ == '__main__':
 
     areas, exclusions, overlaps = count_overlaps(depth, numsegs, labels)
 
+    st = time.time()
     bottom_segments = reduce(operator.ior, [set(labels[0, D, :, :].flat) for D in range(depth)])
-    model, objective, start = build_model(areas, exclusions, overlaps, bottom_segments)
+    model, objective, start, segment_vars, link_vars, link_segments_pairs = build_model(areas, exclusions, overlaps, bottom_segments)
+    print "Building MILP took", int(time.time() - st), "seconds"
+
     # free memory
     areas = exclusions = overlaps = None
     gc.collect()
 
-    print "solving"
+    print "Solving"
+    st = time.time()
     model.maximize(objective, starting_dict=start)
+    print "Solving took", int(time.time() - st), "seconds"
+
+    # Build the map from incoming label to linked labels
+    segment_map = model[segment_vars].flatten().astype(np.int32)  # all on segments
+    segment_map *= np.arange(segment_map.shape[0])  # map every on segment to itself
+    active_links = model[link_vars].flatten()
+    for l1, l2 in link_segments_pairs[active_links > 0, :]:
+        segment_map[l2] = l1  # link higher to lower
+
+    # set background to 0
+    segment_map[0] = 0
+    # Compress labels
+    next_label = 1
+    for idx in range(1, len(segment_map)):
+        if segment_map[idx] == idx:
+            segment_map[idx] = next_label
+            next_label += 1
+        else:
+            segment_map[idx] = segment_map[segment_map[idx]]
+
+    # Apply map to labels
+    for D in range(depth):
+        for Seg in range(numsegs):
+            labels[Seg, D, :, :] = segment_map[labels[Seg, D, :, :][...]]
+
+    # Condense results
+    out_labels = lf.create_dataset('out_labels', [depth, width, height], dtype=np.int32, chunks=tuple(chunking[1:]))
+    for D in range(depth):
+        out_labels[D, :, :] = 0
+        for Seg in range(numsegs):
+            out_labels[D, :, :] += labels[Seg, D, :, :]
+
+    # move to final location
+    if os.path.exists(sys.argv[2]):
+        os.unlink(sys.argv[2])
+
+    os.rename(sys.argv[2] + '_partial', sys.argv[2])
+    print "Successfully wrote", sys.argv[2]
