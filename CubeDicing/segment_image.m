@@ -13,10 +13,6 @@ if ~exist(image_file_path, 'file')
     file_error(image_file_path);
 end
 
-if ~exist(probs_file_path, 'file')
-    file_error(forest_file_path);
-end
-
 disp('segment_image starting\n');
 
 %Open the input image
