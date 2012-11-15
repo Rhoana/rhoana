@@ -20,7 +20,7 @@ class Job(object):
             if not os.path.isdir(os.path.dirname(f)):
                 os.mkdir(os.path.dirname(f))
         subprocess.check_call(["bsub",
-                               "-q", "short_serial",
+                               "-q", "normal_serial" if ('Probability' in self.name or 'Segmented' in self.name) else "short_serial",
                                "-J", self.name,
                                "-w", self.dependency_string()] +
                               self.command())
@@ -159,13 +159,13 @@ if __name__ == '__main__':
 
     # Dice full volume
     blocks = {}
-    for block_idx_z in range((len(segmentations) - 2 * z_halo) / z_size):
+    for block_idx_z in range((len(segmentations) - 2 * z_halo) / z_size)[:3]:
         lo_slice = block_idx_z * z_size
         hi_slice = lo_slice + z_size + 2 * z_halo
-        for block_idx_x in range((image_size - 2 * xy_halo) / xy_size):
+        for block_idx_x in range((image_size - 2 * xy_halo) / xy_size)[:3]:
             xlo = block_idx_x * xy_size
             xhi = xlo + xy_size + 2 * xy_halo
-            for block_idx_y in range((image_size - 2 * xy_halo) / xy_size):
+            for block_idx_y in range((image_size - 2 * xy_halo) / xy_size)[:3]:
                 ylo = block_idx_y * xy_size
                 yhi = ylo + xy_size + 2 * xy_halo
                 blocks[block_idx_x, block_idx_y, block_idx_z] = \
