@@ -2,6 +2,7 @@ function compute_probabilities(varargin)
 
 % Usage:
 % compute_probabilities image_file_path forest_file_path out_file_path [max_chunk_size]
+% compute_probabilities image_file_path forest_file_path out_file_path [xlo ylo xhi yhi]
 
 % Computes boundary probabilities for  the input image using the
 %   given random forest and predefined features.
@@ -12,7 +13,7 @@ d = fileparts(which(mfilename));
 addpath(genpath(fullfile(d, '..', 'lib', 'segmentation')));
 
 % Check for errors
-if length(varargin) < 3 || length(varargin) > 4
+if length(varargin) != 3 or length(varargin) != 4 or length(varargin) != 7
     arg_error();
 end
 
@@ -33,8 +34,16 @@ end
 %Default chunk size
 max_chunk_size = 512;
 halo = 32;
-if length(varargin) >= 4
+if length(varargin) == 4
     max_chunk_size = str2double(varargin{4});
+end
+
+if length(varargin) == 7
+   xlo = varargin({4});
+   ylo = varargin({5});
+   xhi = varargin({6});
+   yhi = varargin({7});
+   max_chunk_size = max(xhi - xlo, yhi - ylo);
 end
 
 if max_chunk_size < halo * 2
@@ -52,6 +61,13 @@ end
 
 %Enhance contrast (globally)
 input_image = imadjust(input_image);
+
+% If we have a subregion specified, chop it out
+if length(varargin) == 7,
+   % Use python indexing
+   input_image = input_image(xlo+1:xhi, ylo+1:yhi);
+   fprintf(1, 'Coring %d,%d to %d,%d', xlo+1, ylo+1, xhi, yhi);
+end
 
 %Load the forest settings
 load(forest_file_path,'forest');
@@ -154,6 +170,7 @@ end
 
 function file_error(filename)
 disp('Usage: segment_image image_file_path forest_file_path out_file_path [max_chunk_size]');
+disp('   or: segment_image image_file_path forest_file_path out_file_path [xlo ylo xhi yhi]');
 disp(['Error: Input file does not exist: ' filename]);
 error('File not found error.');
 end

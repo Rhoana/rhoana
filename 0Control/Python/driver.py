@@ -3,6 +3,7 @@ import os.path
 import os
 import subprocess
 import datetime
+from itertools import product
 
 class Job(object):
     all_jobs = []
@@ -44,6 +45,49 @@ class JobSplit(object):
     def output(self):
         return self.job.output[self.idx]
 
+class Reassemble(Job):
+    '''reassemble a diced job'''
+    def __init__(self, output_sizes, halo_sizes, joblist, output):
+        assert len(output_sizes) == len(halo_sizes)
+        self.output_sizes = output_sizes
+        self.halo_sizes = halo_sizes
+        self.dependencies = joblist
+        self.output = output
+
+    def command(self):
+        return ['reassemble.sh', str(len(self.output_sizes))] + \
+            [str(s) for s in self.output_sizes] + \
+            [str(s) for s in self.halo_sizes] + \
+            [j.output for j in self.dependencies] + \
+            self.output
+
+class Subimage_ProbabilityMap(Job):
+    def __init__(self, raw_image, xlo, ylo, xhi, yhi):
+        Job.__init__(self)
+        self.raw_image = raw_image
+        self.dependencies = []
+        self.coords = (str(c) for c in (xlo, ylo, xhi, yhi))
+        self.output = os.path.join('subimage_probabilities',
+                                   'probs_%s.hdf5' % '_'.join(self.coords))
+
+    def command(self):
+        return ['./compute_probabilities.sh', self.raw_image, self.output] + \
+            list(self.coords)
+
+class Subimage_SegmentedSlice(Job):
+    def __init__(self, probability_map, raw_image, xlo, ylo, xhi, yhi):
+        Job.__init__(self)
+        self.probability_map = probability_map
+        self.raw_image = raw_image
+        self.dependencies = []
+        self.coords = (str(c) for c in (xlo, ylo, xhi, yhi))
+        self.output = os.path.join('subimage_segmentations',
+                                   'segs_%s.hdf5' % '_'.join(self.coords))
+
+    def command(self):
+        return ['./segment_image.sh', self.raw_image, self.probability_map, self.output] + \
+            list(self.coords)
+
 class ProbabilityMap(Job):
     def __init__(self, raw_image, index):
         Job.__init__(self)
@@ -53,7 +97,6 @@ class ProbabilityMap(Job):
 
     def command(self):
         return ['./compute_probabilities.sh', self.raw_image, self.output]
-
 
 class SegmentedSlice(Job):
     def __init__(self, probability_image, index):
@@ -139,47 +182,97 @@ class RemapBlock(Job):
     def command(self):
         return ['./remap_block.sh', self.inputfile, self.mapfile, self.output]
 
+###############################
+# Helper functions
+###############################
+def dice_iter(full_size, core_size, halo_size):
+    for lo in range(0, full_size, core_size):
+        yield (lo - halo_size, lo + core_size + 2 * halo_size)
+
+def dice(job_builder, args, full_sizes, core_sizes, halo_sizes):
+    iters = [dice_iter(*sizes) for sizes in zip(full_sizes, core_sizes, halo_sizes)]
+    jobs = []
+    for coords in product(iters):
+        # coords is a tuples of (lo, hi)
+        lovals, hivals = zip(*coords)
+        jobs.append(job_builder(*(args + lovals + hivals)))
+    return jobs
+
+
+###############################
+# Driver
+###############################
 if __name__ == '__main__':
     image_size = 1024
-    xy_size = 384
-    xy_halo = 64
-    z_size = 20
-    z_halo = 6
+
+    probability_subimage_size = 512
+    probability_subimage_halo = 32
+
+    segmentation_subimage_size = 512
+    segmentation_subimage_halo = 256
+
+    block_xy_size = 384
+    block_xy_halo = 64
+    block_z_size = 20
+    block_z_halo = 6
 
     assert 'CONNECTOME' in os.environ
     assert 'VIRTUAL_ENV' in os.environ
 
-    # Compute probabilities
-    probabilities = [ProbabilityMap(f, idx) for idx, f in
-                     enumerate(f.rstrip() for f in open(sys.argv[1]))]
+    images = [f.rstrip() for f in open(sys.argv[1])]
 
-    # Label all slices
-    segmentations = [SegmentedSlice(p, idx)
-                     for idx, p in enumerate(probabilities)]
+    # Dice raw images and cmopute probability maps
+    subimage_probability_maps = [dice(Subimage_ProbabilityMap,
+                                      (f,),
+                                      (image_size, image_size),
+                                      (probability_subimage_size, probability_subimage_size)
+                                      (probability_subimage_halo, probability_subimage_halo))
+                                 for f in images]
+
+    # Reassemble full probability maps
+    probability_maps = [Reassemble((images_size, images_size),
+                                   (probability_subimage_halo, probability_subimage_halo),
+                                   subs, os.path.join('probabilities', 'prob_%d.hdf5' % idx))
+                        for idx, subs in enumerate(subimage_probability_maps)]
+
+    # Dice probability maps and compute segmentations
+    subimage_segmentations = [dice(Subimage_SegmentedSlice,
+                                   (pm, raw_image),
+                                   (image_size, image_size),
+                                   (segmentation_subimage_size, segmentation_subimage_size),
+                                   (segmentation_subimage_halo, segmentation_subimage_halo))
+                              for pm, raw_image in zip(probability_maps, images)]
+
+    # Reassemble full segmentation maps
+    segmentations = [Reassemble((image_size, image_size),
+                                (segmentation_subimage_halo, segmentation_subimage_halo),
+                                subs, os.path.join('segmentations', 'segs_%d.hdf5' % idx))
+                     for idx, subs in enumerate(subimage_segmentations)]
 
     # Dice full volume
     blocks = {}
-    for block_idx_z in range((len(segmentations) - 2 * z_halo) / z_size):
-        lo_slice = block_idx_z * z_size
-        hi_slice = lo_slice + z_size + 2 * z_halo
-        for block_idx_x in range((image_size - 2 * xy_halo) / xy_size):
-            xlo = block_idx_x * xy_size
-            xhi = xlo + xy_size + 2 * xy_halo
-            for block_idx_y in range((image_size - 2 * xy_halo) / xy_size):
-                ylo = block_idx_y * xy_size
-                yhi = ylo + xy_size + 2 * xy_halo
+    for block_idx_z in range((len(segmentations) - 2 * block_z_halo) / block_z_size):
+        lo_slice = block_idx_z * block_z_size
+        hi_slice = lo_slice + block_z_size + 2 * block_z_halo
+        for block_idx_x in range((image_size - 2 * block_xy_halo) / block_xy_size):
+            xlo = block_idx_x * block_xy_size
+            xhi = xlo + block_xy_size + 2 * block_xy_halo
+            for block_idx_y in range((image_size - 2 * block_xy_halo) / block_xy_size):
+                ylo = block_idx_y * block_xy_size
+                yhi = ylo + block_xy_size + 2 * block_xy_halo
                 blocks[block_idx_x, block_idx_y, block_idx_z] = \
                     Block(segmentations[lo_slice:hi_slice],
                           (block_idx_x, block_idx_y, block_idx_z),
-                          xlo + 1, ylo + 1, xhi + 1, yhi + 1)  # matlab indexing
+                          xlo + 1, ylo + 1, xhi, yhi)  # matlab indexing
 
     # Window fuse all blocks
     fused_blocks = dict((idxs, FusedBlock(block, idxs, num)) for num, (idxs, block) in enumerate(blocks.iteritems()))
 
     # Pairwise match all blocks.
     #
-    # We overwrite each block in fused_blocks with the output of the pairwise
-    # matching, and work in non-overlapping sets (even-to-odd, then odd-to-even)
+    # We overwrite each block in fused_blocks (the python dict, not the file)
+    # with the output of the pairwise matching, and work in non-overlapping
+    # sets (even-to-odd, then odd-to-even)
     for direction in range(3):  # X, Y, Z
         for wpidx, which_pairs in enumerate(['even', 'odd']):
             for idx in fused_blocks:
@@ -191,7 +284,7 @@ if __name__ == '__main__':
                         pw = PairwiseMatching(fused_blocks[idx], fused_blocks[neighbor_idx],
                                               direction,  # matlab
                                               which_pairs,
-                                              xy_halo if direction < 2 else z_halo)
+                                              block_xy_halo if direction < 2 else block_z_halo)
                         # we can safely overwrite because of nonoverlapping even/odd sets
                         fused_blocks[idx] = JobSplit(pw, 0)
                         fused_blocks[neighbor_idx] = JobSplit(pw, 1)
