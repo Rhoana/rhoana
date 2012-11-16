@@ -6,9 +6,9 @@ import h5py
 if __name__ == '__main__':
     # Parse arguments
     args = sys.argv[1:]
+    dataset_name = args.pop(0)
     num_dims = int(args.pop(0))
     full_sizes = np.array([int(args.pop(0)) for i in range(num_dims)])
-    halo_sizes = np.array([int(args.pop(0)) for i in range(num_dims)])
     input_files = args[:-1]
     output_path = args[-1]
 
@@ -24,15 +24,12 @@ if __name__ == '__main__':
     # Loop over inputs
     for path in input_files:
         infile = h5py.File(path)
-        diced_output_name = infile['diced_output_name'][...]
         original_coords = infile['original_coords'][...]
         diced_data = infile[diced_output_name]
 
         if out_dataset is None:
             # Chunk by block size
             chunksize = np.array(diced_data.shape)
-            for idx in len(halo_sizes):
-                chunksize[idx] -= 2 * halo_sizes[idx]
             out_dataset = \
                 outf.create_dataset(diced_output_name,
                                     full_sizes,
@@ -41,12 +38,10 @@ if __name__ == '__main__':
                                     compressed=True)
 
         # compute destination coordinates
-        src_coords = [np.s_[halo:-halo] for halo in halo_sizes][::-1]  # Matlab
-        dst_coords = [np.s_[(lo + halo):(lo + sz - halo)][::-1]  # Matlab
-                      for lo, sz, halo in zip(original_coords,
-                                              diced_data.shape,
-                                              halo_sizes)]
-        out_dataset[dst_coords] = diced_data[src_coords]
+        lovals = original_coords[:num_dims]
+        hivals = original_coords[num_dims:]
+        dst_coords = [np.s_[lo:hi] for lo, hi in zip(lovals, hivals)][::-1]  # Matlab HDF5 reorders coords
+        out_dataset[dst_coords] = diced_data
 
     # move to final location
     if os.path.exists(output_path):

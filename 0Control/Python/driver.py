@@ -48,46 +48,48 @@ class JobSplit(object):
 
 class Reassemble(Job):
     '''reassemble a diced job'''
-    def __init__(self, output_sizes, halo_sizes, joblist, output):
-        assert len(output_sizes) == len(halo_sizes)
+    def __init__(self, dataset, output_sizes, joblist, output):
+        Job.__init__(self)
         self.output_sizes = output_sizes
-        self.halo_sizes = halo_sizes
+        self.dataset = dataset
         self.dependencies = joblist
         self.output = output
 
     def command(self):
-        return ['reassemble.sh', str(len(self.output_sizes))] + \
+        return ['reassemble.sh', self.dataset,
+                str(len(self.output_sizes))] + \
             [str(s) for s in self.output_sizes] + \
-            [str(s) for s in self.halo_sizes] + \
             [j.output for j in self.dependencies] + \
-            self.output
+            [self.output]
 
 class Subimage_ProbabilityMap(Job):
-    def __init__(self, raw_image, xlo, ylo, xhi, yhi):
+    def __init__(self, raw_image, idx, xlo, ylo, xhi, yhi, xlo_core, ylo_core, xhi_core, yhi_core):
         Job.__init__(self)
         self.raw_image = raw_image
         self.dependencies = []
-        self.coords = (str(c) for c in (xlo, ylo, xhi, yhi))
+        self.coords = [str(c) for c in (xlo, ylo, xhi, yhi)]
+        self.core_coords = [str(c) for c in (xlo_core, ylo_core, xhi_core, yhi_core)]
         self.output = os.path.join('subimage_probabilities',
-                                   'probs_%s.hdf5' % '_'.join(self.coords))
+                                   'probs_%d_%s.hdf5' % (idx, '_'.join(self.coords)))
 
     def command(self):
         return ['./compute_probabilities.sh', self.raw_image, self.output] + \
-            list(self.coords)
+            self.coords + self.core_coords
 
 class Subimage_SegmentedSlice(Job):
-    def __init__(self, probability_map, raw_image, xlo, ylo, xhi, yhi):
+    def __init__(self, idx, probability_map, raw_image, xlo, ylo, xhi, yhi, xlo_core, ylo_core, xhi_core, yhi_core):
         Job.__init__(self)
         self.probability_map = probability_map
         self.raw_image = raw_image
         self.dependencies = [self.probability_map]
-        self.coords = (str(c) for c in (xlo, ylo, xhi, yhi))
+        self.coords = [str(c) for c in (xlo, ylo, xhi, yhi)]
+        self.core_coords = [str(c) for c in (xlo_core, ylo_core, xhi_core, yhi_core)]
         self.output = os.path.join('subimage_segmentations',
-                                   'segs_%s.hdf5' % '_'.join(self.coords))
+                                   'segs_%d_%s.hdf5' % (idx, '_'.join(self.coords)))
 
     def command(self):
         return ['./segment_image.sh', self.raw_image, self.probability_map.output, self.output] + \
-            list(self.coords)
+            self.coords + self.core_coords
 
 class ProbabilityMap(Job):
     def __init__(self, raw_image, index):
@@ -187,16 +189,20 @@ class RemapBlock(Job):
 # Helper functions
 ###############################
 def dice_iter(full_size, core_size, halo_size):
+    # we produce two sets of bounds: halo+core+halo and core alone
     for lo in range(0, full_size, core_size):
-        yield (lo - halo_size, lo + core_size + 2 * halo_size)
+        yield (max(0, lo - halo_size),
+               min(full_size - 1, lo + core_size + 2 * halo_size),
+               lo,
+               min(full_size - 1, lo + core_size))
 
 def dice(job_builder, args, full_sizes, core_sizes, halo_sizes):
     iters = [dice_iter(*sizes) for sizes in zip(full_sizes, core_sizes, halo_sizes)]
     jobs = []
-    for coords in product(iters):
+    for coords in product(*iters):
         # coords is a tuples of (lo, hi)
-        lovals, hivals = zip(*coords)
-        jobs.append(job_builder(*(args + lovals[0] + hivals[0])))
+        lovals, hivals, locore, hicore = zip(*coords)
+        jobs.append(job_builder(*(args + lovals + hivals + locore + hicore)))
     return jobs
 
 
@@ -204,13 +210,13 @@ def dice(job_builder, args, full_sizes, core_sizes, halo_sizes):
 # Driver
 ###############################
 if __name__ == '__main__':
-    image_size = 1024
+    image_size = 5120
 
-    probability_subimage_size = 512
+    probability_subimage_size = 1024
     probability_subimage_halo = 32
 
-    segmentation_subimage_size = 512
-    segmentation_subimage_halo = 256
+    segmentation_subimage_size = 1024
+    segmentation_subimage_halo = 128
 
     block_xy_size = 384
     block_xy_halo = 64
@@ -224,29 +230,32 @@ if __name__ == '__main__':
 
     # Dice raw images and cmopute probability maps
     subimage_probability_maps = [dice(Subimage_ProbabilityMap,
-                                      (f,),
+                                      (f, idx),
                                       (image_size, image_size),
                                       (probability_subimage_size, probability_subimage_size),
                                       (probability_subimage_halo, probability_subimage_halo))
-                                 for f in images]
+                                 for idx, f in enumerate(images)]
+
+    print subimage_probability_maps[0][0].command()
 
     # Reassemble full probability maps
-    probability_maps = [Reassemble((image_size, image_size),
-                                   (probability_subimage_halo, probability_subimage_halo),
+    probability_maps = [Reassemble('improb', (image_size, image_size),
                                    subs, os.path.join('probabilities', 'prob_%d.hdf5' % idx))
                         for idx, subs in enumerate(subimage_probability_maps)]
 
+    Job.run_all()
+    sys.exit(0)
+
     # Dice probability maps and compute segmentations
     subimage_segmentations = [dice(Subimage_SegmentedSlice,
-                                   (pm, raw_image),
+                                   (idx, pm, raw_image),
                                    (image_size, image_size),
                                    (segmentation_subimage_size, segmentation_subimage_size),
                                    (segmentation_subimage_halo, segmentation_subimage_halo))
-                              for pm, raw_image in zip(probability_maps, images)]
+                              for idx, (pm, raw_image) in enumerate(zip(probability_maps, images))]
 
     # Reassemble full segmentation maps
-    segmentations = [Reassemble((image_size, image_size),
-                                (segmentation_subimage_halo, segmentation_subimage_halo),
+    segmentations = [Reassemble('segs', (image_size, image_size),
                                 subs, os.path.join('segmentations', 'segs_%d.hdf5' % idx))
                      for idx, subs in enumerate(subimage_segmentations)]
 
