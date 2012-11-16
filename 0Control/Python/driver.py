@@ -56,7 +56,7 @@ class Reassemble(Job):
         self.output = output
 
     def command(self):
-        return ['reassemble.sh', self.dataset,
+        return ['./reassemble.sh', self.dataset,
                 str(len(self.output_sizes))] + \
             [str(s) for s in self.output_sizes] + \
             [j.output for j in self.dependencies] + \
