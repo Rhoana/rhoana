@@ -13,7 +13,7 @@ d = fileparts(which(mfilename));
 addpath(genpath(fullfile(d, '..', 'lib', 'segmentation')));
 
 % Check for errors
-if length(varargin) != 11
+if length(varargin) ~= 11
     arg_error();
 end
 
