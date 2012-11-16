@@ -12,11 +12,6 @@ function compute_probabilities(image_file_path, forest_file_path, out_file_path,
 d = fileparts(which(mfilename));
 addpath(genpath(fullfile(d, '..', 'lib', 'segmentation')));
 
-% Check for errors
-if length(varargin) ~= 11
-    arg_error();
-end
-
 fprintf(1, 'segment_image starting\n');
 
 if ~exist(image_file_path, 'file')
