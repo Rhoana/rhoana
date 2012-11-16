@@ -56,14 +56,13 @@ def count_overlaps(depth, numsegs, labels):
     overlaps = {}
 
     st = time.time()
+
+    # Count areas of each label
     for D in range(depth):
         for Seg in range(numsegs):
             lbls = labels[Seg, D, :, :][...]
             keys, counts = pandas.lib.value_count_int64(lbls.ravel())
             areas.update(zip(keys, counts))
-    print "Labeling took", int(time.time() - st), "seconds"
-
-    st = time.time()
 
     # Compute all the labels for all the slices, making each unique as necessary
     print "Computing segment-to-segment overlaps (%d slices, %d multisegmentations)" % (depth, numsegs)
@@ -186,14 +185,16 @@ if __name__ == '__main__':
     st = time.time()
 
     # Precompute labels, store in HDF5
-    lf = h5py.File(sys.argv[2] + '_partial', 'w')
+    output_path = sys.argv[2]
+    lf = h5py.File(output_path + '_partial', 'w')
     chunking = list(segmentations.shape)
     chunking[0] = 1
     chunking[1] = 1
-    labels = lf.create_dataset('labels', segmentations.shape, dtype=np.int64, chunks=tuple(chunking))
+    labels = lf.create_dataset('seglabels', segmentations.shape, dtype=np.int64, chunks=tuple(chunking), compression='gzip')
     for D in range(depth):
         for Seg in range(numsegs):
             labels[Seg, D, :, :] = unique_labels(D, Seg, segmentations[Seg, D, :, :][...])
+    print "Labeling took", int(time.time() - st), "seconds"
 
     areas, exclusions, overlaps = count_overlaps(depth, numsegs, labels)
 
@@ -235,15 +236,15 @@ if __name__ == '__main__':
             labels[Seg, D, :, :] = segment_map[labels[Seg, D, :, :][...]]
 
     # Condense results
-    out_labels = lf.create_dataset('out_labels', [depth, width, height], dtype=np.int32, chunks=tuple(chunking[1:]))
+    out_labels = lf.create_dataset('labels', [depth, width, height], dtype=np.int32, chunks=tuple(chunking[1:]), compression='gzip')
     for D in range(depth):
         out_labels[D, :, :] = 0
         for Seg in range(numsegs):
             out_labels[D, :, :] += labels[Seg, D, :, :]
 
     # move to final location
-    if os.path.exists(sys.argv[2]):
-        os.unlink(sys.argv[2])
+    if os.path.exists(output_path):
+        os.unlink(output_path)
 
-    os.rename(sys.argv[2] + '_partial', sys.argv[2])
+    os.rename(output_path+ '_partial', output_path)
     print "Successfully wrote", sys.argv[2]
