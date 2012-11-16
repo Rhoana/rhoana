@@ -20,7 +20,8 @@ class Job(object):
         for f in out:
             if not os.path.isdir(os.path.dirname(f)):
                 os.mkdir(os.path.dirname(f))
-        subprocess.check_call(["bsub",
+        print "RUN", self.command()
+        0 and subprocess.check_call(["echo", "bsub",
                                "-q", "short_serial",
                                "-J", self.name,
                                "-w", self.dependency_string()] +
@@ -79,13 +80,13 @@ class Subimage_SegmentedSlice(Job):
         Job.__init__(self)
         self.probability_map = probability_map
         self.raw_image = raw_image
-        self.dependencies = []
+        self.dependencies = [self.probability_map]
         self.coords = (str(c) for c in (xlo, ylo, xhi, yhi))
         self.output = os.path.join('subimage_segmentations',
                                    'segs_%s.hdf5' % '_'.join(self.coords))
 
     def command(self):
-        return ['./segment_image.sh', self.raw_image, self.probability_map, self.output] + \
+        return ['./segment_image.sh', self.raw_image, self.probability_map.output, self.output] + \
             list(self.coords)
 
 class ProbabilityMap(Job):
@@ -195,7 +196,7 @@ def dice(job_builder, args, full_sizes, core_sizes, halo_sizes):
     for coords in product(iters):
         # coords is a tuples of (lo, hi)
         lovals, hivals = zip(*coords)
-        jobs.append(job_builder(*(args + lovals + hivals)))
+        jobs.append(job_builder(*(args + lovals[0] + hivals[0])))
     return jobs
 
 
@@ -225,12 +226,12 @@ if __name__ == '__main__':
     subimage_probability_maps = [dice(Subimage_ProbabilityMap,
                                       (f,),
                                       (image_size, image_size),
-                                      (probability_subimage_size, probability_subimage_size)
+                                      (probability_subimage_size, probability_subimage_size),
                                       (probability_subimage_halo, probability_subimage_halo))
                                  for f in images]
 
     # Reassemble full probability maps
-    probability_maps = [Reassemble((images_size, images_size),
+    probability_maps = [Reassemble((image_size, image_size),
                                    (probability_subimage_halo, probability_subimage_halo),
                                    subs, os.path.join('probabilities', 'prob_%d.hdf5' % idx))
                         for idx, subs in enumerate(subimage_probability_maps)]
