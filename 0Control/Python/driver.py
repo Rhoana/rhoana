@@ -255,9 +255,12 @@ if __name__ == '__main__':
                               for idx, (pm, raw_image) in enumerate(zip(probability_maps, images))]
 
     # Reassemble full segmentation maps
-    segmentations = [Reassemble('segs', (image_size, image_size),
+    segmentations = [Reassemble('segs', (image_size, image_size, -1),
                                 subs, os.path.join('segmentations', 'segs_%d.hdf5' % idx))
                      for idx, subs in enumerate(subimage_segmentations)]
+
+    Job.run_all()
+    sys.exit(0)
 
     # Dice full volume
     blocks = {}

@@ -12,7 +12,7 @@ function compute_probabilities(image_file_path, forest_file_path, out_file_path,
 d = fileparts(which(mfilename));
 addpath(genpath(fullfile(d, '..', 'lib', 'segmentation')));
 
-fprintf(1, 'segment_image starting\n');
+fprintf(1, 'compute_probabilities starting\n');
 
 if ~exist(image_file_path, 'file')
     file_error(image_file_path);
@@ -34,13 +34,13 @@ end
 input_image = imadjust(input_image);
 
 % Crop subregion - Use python indexing
-input_image = input_image(xlo+1:xhi, ylo+1:yhi);
 fprintf(1, 'Coring %d,%d to %d,%d', xlo+1, ylo+1, xhi, yhi);
+input_image = input_image(xlo+1:xhi, ylo+1:yhi);
 
 %Load the forest settings
 load(forest_file_path,'forest');
 
-%Allocate space for the probabilities
+%Compute probabilities
 imProb = generateMembraneProbabilities(input_image, forest);
 
 % Extract the core

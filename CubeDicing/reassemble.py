@@ -25,13 +25,14 @@ if __name__ == '__main__':
     for path in input_files:
         infile = h5py.File(path)
         original_coords = infile['original_coords'][...]
-        diced_data = infile[diced_output_name]
+        diced_data = infile[dataset_name]
 
         if out_dataset is None:
             # Chunk by block size
+            full_sizes = [s for idx, s in enumerate(full_sizes) if full_sizes > 0 else diced_data.shape[idx]]
             chunksize = np.array(diced_data.shape)
             out_dataset = \
-                outf.create_dataset(diced_output_name,
+                outf.create_dataset(dataset_name,
                                     full_sizes,
                                     dtype=diced_data.dtype,
                                     chunks=tuple(chunksize),
@@ -42,6 +43,7 @@ if __name__ == '__main__':
         hivals = original_coords[num_dims:]
         dst_coords = [np.s_[lo:hi] for lo, hi in zip(lovals, hivals)][::-1]  # Matlab HDF5 reorders coords
         out_dataset[dst_coords] = diced_data
+    outf.close()
 
     # move to final location
     if os.path.exists(output_path):
