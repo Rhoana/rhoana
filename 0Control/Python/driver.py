@@ -21,7 +21,8 @@ class Job(object):
             if not os.path.isdir(os.path.dirname(f)):
                 os.mkdir(os.path.dirname(f))
         print "RUN", self.command()
-        0 and subprocess.check_call(["echo", "bsub",
+        subprocess.check_call(["bsub",
+                               "-g", "/diced_connectome",
                                "-q", "short_serial",
                                "-J", self.name,
                                "-w", self.dependency_string()] +

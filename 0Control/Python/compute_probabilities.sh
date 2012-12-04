@@ -12,6 +12,7 @@ SLICE_FILE=$1
 CUBEDIR=${CONNECTOME}/Pipeline/CubeDicing
 COORDS=$(printf ",%s" ${*:3})
 if [ $# -eq 2 ]
+then
     COORDS=""
 fi
 

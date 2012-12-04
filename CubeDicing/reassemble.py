@@ -14,7 +14,6 @@ if __name__ == '__main__':
 
     print "Reassembling", " ".join(input_files)
     print "Into", output_path
-    print "With halos", halo_sizes
 
     # Create temporary output
     temp_path = output_path + '_partial'
@@ -42,7 +41,7 @@ if __name__ == '__main__':
         lovals = original_coords[:num_dims]
         hivals = original_coords[num_dims:]
         dst_coords = [np.s_[lo:hi] for lo, hi in zip(lovals, hivals)][::-1]  # Matlab HDF5 reorders coords
-        out_dataset[dst_coords] = diced_data
+        out_dataset[tuple(dst_coords)] = diced_data
     outf.close()
 
     # move to final location
