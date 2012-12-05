@@ -53,7 +53,7 @@ temp_file_path = [out_file_path, '_partial'];
 if exist(temp_file_path, 'file'),
   delete(temp_file_path);
 end
-h5create(temp_file_path, '/improb', [Inf, Inf], 'DataType', 'double', 'ChunkSize', [64,64], 'Deflate', 9, 'Shuffle', true);
+h5create(temp_file_path, '/improb', [Inf, Inf], 'DataType', 'double', 'ChunkSize', [256,256], 'Deflate', 9, 'Shuffle', true);
 h5create(temp_file_path, '/original_coords', 4, 'DataType', 'uint32');
 
 h5write(temp_file_path, '/improb', imProb, [1, 1], size(imProb));
