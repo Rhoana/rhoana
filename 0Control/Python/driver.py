@@ -25,6 +25,8 @@ class Job(object):
                                "-g", "/diced_connectome",
                                "-q", "short_serial",
                                "-J", self.name,
+                               "-oo", "logs/out." + self.name,
+                               "-eo", "logs/error." + self.name,
                                "-w", self.dependency_string()] +
                               self.command())
 
@@ -244,9 +246,6 @@ if __name__ == '__main__':
                                    subs, os.path.join('probabilities', 'prob_%d.hdf5' % idx))
                         for idx, subs in enumerate(subimage_probability_maps)]
 
-    Job.run_all()
-    sys.exit(0)
-
     # Dice probability maps and compute segmentations
     subimage_segmentations = [dice(Subimage_SegmentedSlice,
                                    (idx, pm, raw_image),
@@ -260,8 +259,6 @@ if __name__ == '__main__':
                                 subs, os.path.join('segmentations', 'segs_%d.hdf5' % idx))
                      for idx, subs in enumerate(subimage_segmentations)]
 
-    Job.run_all()
-    sys.exit(0)
 
     # Dice full volume
     blocks = {}

@@ -8,7 +8,7 @@ if __name__ == '__main__':
     args = sys.argv[1:]
     dataset_name = args.pop(0)
     num_dims = int(args.pop(0))
-    full_sizes = np.array([int(args.pop(0)) for i in range(num_dims)])
+    full_sizes = np.array([int(args.pop(0)) for i in range(num_dims)])[::-1]  # Matlab HDF5!
     input_files = args[:-1]
     output_path = args[-1]
 
@@ -22,20 +22,22 @@ if __name__ == '__main__':
 
     # Loop over inputs
     for path in input_files:
+        print "Reading", path, "..."
         infile = h5py.File(path)
         original_coords = infile['original_coords'][...]
         diced_data = infile[dataset_name]
 
         if out_dataset is None:
             # Chunk by block size
-            full_sizes = [s for idx, s in enumerate(full_sizes) if full_sizes > 0 else diced_data.shape[idx]]
+            full_sizes = [(s if s > 0 else diced_data.shape[idx]) for idx, s in enumerate(full_sizes)]
             chunksize = np.array(diced_data.shape)
             out_dataset = \
                 outf.create_dataset(dataset_name,
                                     full_sizes,
                                     dtype=diced_data.dtype,
                                     chunks=tuple(chunksize),
-                                    compressed=True)
+                                    shuffle=True,
+                                    compression='gzip')
 
         # compute destination coordinates
         lovals = original_coords[:num_dims]
@@ -49,3 +51,4 @@ if __name__ == '__main__':
         os.unlink(output_path)
 
     os.rename(temp_path, output_path)
+    print "Success"
