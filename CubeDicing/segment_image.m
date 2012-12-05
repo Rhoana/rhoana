@@ -1,6 +1,8 @@
-function segment_image(image_file_path, probs_file_path, out_file_path, xlo, ylo, xhi, yhi, core_xlo, core_ylo, core_xhi, core_yhi))
+function segment_image(image_file_path, probs_file_path, out_file_path, xlo, ylo, xhi, yhi, core_xlo, core_ylo, core_xhi, core_yhi)
 % Usage:
 % segment_image image_file_in probability_file_in out_file_path
+
+disp('Entry');
 
 % Segments the input boundary probability image stored in an hdf5 file.
 % Outputs the resulting segmentations to out_file_path as an hdf5 file
@@ -80,10 +82,10 @@ if exist(temp_file_path, 'file'),
   delete(temp_file_path);
 end
 h5create(temp_file_path, '/segs', [Inf, Inf, Inf], 'DataType', 'uint8', 'ChunkSize', [64,64,10], 'Deflate', 9);
-h5create(temp_file_path, '/original_coords', 4, 'DataType', 'uint32');
+h5create(temp_file_path, '/original_coords', 6, 'DataType', 'uint32');
 
 h5write(temp_file_path, '/segs', segs, [1, 1, 1], size(segs))
-h5write(temp_file_path, '/original_coords', [core_xlo, core_ylo, 1, core_xhi, core_yhi, size(segs, 3)]);
+h5write(temp_file_path, '/original_coords', [core_xlo, core_ylo, 0, core_xhi, core_yhi, size(segs, 3)]);
 
 movefile(temp_file_path, out_file_path);
 fprintf(1, 'segment_image successfuly wrote to file: %s.\n', out_file_path);
