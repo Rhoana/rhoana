@@ -22,6 +22,8 @@ class Job(object):
                 os.mkdir(os.path.dirname(f))
         print "RUN", self.command()
         subprocess.check_call(["bsub",
+                               "-r",
+                               "-Q", "all ~0",
                                "-g", "/diced_connectome",
                                "-q", "short_serial",
                                "-J", self.name,
