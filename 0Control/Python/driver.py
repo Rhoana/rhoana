@@ -22,6 +22,8 @@ class Job(object):
                 os.mkdir(os.path.dirname(f))
         print "RUN", self.command()
         subprocess.check_call(["bsub",
+                               "-Q", "all ~0",
+                               "-r",
                                "-g", "/diced_connectome",
                                "-q", "short_serial",
                                "-J", self.name,
@@ -76,7 +78,7 @@ class Subimage_ProbabilityMap(Job):
                                    'probs_%d_%s.hdf5' % (idx, '_'.join(self.coords)))
 
     def command(self):
-        return ['./compute_probabilities.sh', self.raw_image, self.output] + \
+        return ['python', 'compute_probabilities.py', self.raw_image, self.output] + \
             self.coords + self.core_coords
 
 class Subimage_SegmentedSlice(Job):
@@ -91,29 +93,8 @@ class Subimage_SegmentedSlice(Job):
                                    'segs_%d_%s.hdf5' % (idx, '_'.join(self.coords)))
 
     def command(self):
-        return ['./segment_image.sh', self.raw_image, self.probability_map.output, self.output] + \
+        return ['python', 'segment_image.py', self.raw_image, self.probability_map.output, self.output] + \
             self.coords + self.core_coords
-
-class ProbabilityMap(Job):
-    def __init__(self, raw_image, index):
-        Job.__init__(self)
-        self.raw_image = raw_image
-        self.dependencies = []
-        self.output = os.path.join('probabilities', 'probs_%d.hdf5' % index)
-
-    def command(self):
-        return ['./compute_probabilities.sh', self.raw_image, self.output]
-
-class SegmentedSlice(Job):
-    def __init__(self, probability_image, index):
-        Job.__init__(self)
-        self.probability_image = probability_image.output
-        self.raw_image = probability_image.raw_image
-        self.dependencies = [probability_image]
-        self.output = os.path.join('segmentations', 'slice_%d.hdf5' % index)
-
-    def command(self):
-        return ['./segment_image.sh', self.raw_image, self.probability_image, self.output]
 
 class Block(Job):
     def __init__(self, segmented_slices, indices, *args):
