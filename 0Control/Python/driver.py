@@ -27,8 +27,8 @@ class Job(object):
                                "-g", "/diced_connectome",
                                "-q", "short_serial",
                                "-J", self.name,
-                               "-oo", "logs/out." + self.name,
-                               "-eo", "logs/error." + self.name,
+                               "-o", "logs/out." + self.name,
+                               "-e", "logs/error." + self.name,
                                "-w", self.dependency_string()] +
                               self.command())
 

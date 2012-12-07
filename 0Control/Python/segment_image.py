@@ -7,7 +7,7 @@ def check_file(filename):
     import h5py
     f = h5py.File(filename)
     if set(f.keys()) != set(['segs', 'original_coords']):
-        os.unlink(f)
+        os.unlink(filename)
         return False
     return True
 
@@ -17,14 +17,14 @@ try:
     slice_file = args[0]
     prob_file = args[1]
     output_file = args[2]
-    coords = "'" + "','".join(args[3:]) + "'"
+    coords = ",".join(args[3:])
 
     if os.path.exists(output_file):
         print output_file, "already exists"
         if check_file(output_file):
             sys.exit(0)
 
-    print "Computing probabilities", jobidx, args
+    print "Computing probabilities", args
 
     cubedir = os.path.join(os.environ['CONNECTOME'], 'Pipeline', 'CubeDicing')
     os.environ['MATLABPATH'] = cubedir

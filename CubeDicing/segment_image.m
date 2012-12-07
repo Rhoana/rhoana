@@ -40,17 +40,17 @@ imProb = imProb(xlo+1:xhi, ylo+1:yhi);
 %l_s_range = 0.6;
 %l_gc_range = 0.1;
 
-%Dual settings: use 30 threshold and 30 gap completion segmentations
+%Dual settings: use 20 threshold and 10 gap completion segmentations
 %(a linear combination of both might be even better)
 %Threshold
-threshRangeA = 0.21:0.01:0.5;
+threshRangeA = 0.21:0.015:0.5;
 l_s_rangeA = 0.6;
 l_gc_rangeA = 0.1;
 
 %Gap completion
 threshRangeB = 0.5;
 l_s_rangeB = 0.2;
-l_gc_rangeB = 0.05:0.05:1.5;
+l_gc_rangeB = 0.05:0.05:0.5;
 
 %maxSegi = length(threshRange) * length(l_s_range) * length(l_gc_range);
 maxSegi = length(threshRangeA) * length(l_s_rangeA) * length(l_gc_rangeA) + ...
