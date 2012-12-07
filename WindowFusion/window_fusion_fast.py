@@ -185,7 +185,8 @@ if __name__ == '__main__':
     st = time.time()
 
     # Precompute labels, store in HDF5
-    output_path = sys.argv[2]
+    block_offset = int(sys.argv[2]) << 32
+    output_path = sys.argv[3]
     lf = h5py.File(output_path + '_partial', 'w')
     chunking = list(segmentations.shape)
     chunking[0] = 1
@@ -236,9 +237,9 @@ if __name__ == '__main__':
             labels[Seg, D, :, :] = segment_map[labels[Seg, D, :, :][...]]
 
     # Condense results
-    out_labels = lf.create_dataset('labels', [depth, width, height], dtype=np.int32, chunks=tuple(chunking[1:]), compression='gzip')
+    out_labels = lf.create_dataset('labels', [depth, width, height], dtype=np.int64, chunks=tuple(chunking[1:]), compression='gzip')
     for D in range(depth):
-        out_labels[D, :, :] = 0
+        out_labels[D, :, :] = block_offset
         for Seg in range(numsegs):
             out_labels[D, :, :] += labels[Seg, D, :, :]
 
