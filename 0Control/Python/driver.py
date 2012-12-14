@@ -5,7 +5,7 @@ import subprocess
 import datetime
 from itertools import product
 
-FUSED_QUEUE = "normal_serial"
+FUSED_QUEUE = "short_serial"
 
 class Job(object):
     all_jobs = []
@@ -212,8 +212,8 @@ if __name__ == '__main__':
     segmentation_subimage_halo = 128
 
     block_xy_halo = 64
-    block_xy_size = 256 - (2 * 64)
-    block_z_size = 15
+    block_xy_size = 512 - (2 * 64)
+    block_z_size = 20
     block_z_halo = 6
 
     assert 'CONNECTOME' in os.environ

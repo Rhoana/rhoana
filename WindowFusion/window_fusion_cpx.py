@@ -170,6 +170,7 @@ def build_model(areas, exclusions, overlaps):
     print "done"
     model.objective.set_sense(model.objective.sense.maximize)
     model.parameters.threads.set(1) 
+    model.parameters.mip.tolerances.mipgap.set(0.02)  # 2% tolerance
 
     # model.write("theproblem.lp")
     return model, link_to_segs
