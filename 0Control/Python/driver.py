@@ -5,11 +5,14 @@ import subprocess
 import datetime
 from itertools import product
 
+FUSED_QUEUE = "normal_serial"
+
 class Job(object):
     all_jobs = []
 
     def __init__(self):
         self.name = self.__class__.__name__ + str(len(Job.all_jobs)) + '_' + datetime.datetime.now().isoformat()
+        self.already_done = False
         Job.all_jobs.append(self)
 
     def run(self):
@@ -20,12 +23,15 @@ class Job(object):
         for f in out:
             if not os.path.isdir(os.path.dirname(f)):
                 os.mkdir(os.path.dirname(f))
+        if self.already_done:
+            return
         print "RUN", self.command()
         subprocess.check_call(["bsub",
                                "-Q", "all ~0",
                                "-r",
+                               "-R", "rusage[mem=6000]",
                                "-g", "/diced_connectome",
-                               "-q", "short_serial",
+                               "-q", FUSED_QUEUE if "FusedBlock" in self.name else "short_serial" ,
                                "-J", self.name,
                                "-o", "logs/out." + self.name,
                                "-e", "logs/error." + self.name,
@@ -33,7 +39,7 @@ class Job(object):
                               self.command())
 
     def dependency_string(self):
-        return " && ".join("done(%s)" % d.name for d in self.dependencies)
+        return " && ".join("done(%s)" % d.name for d in self.dependencies if not d.already_done)
 
     @classmethod
     def run_all(cls):
@@ -59,6 +65,7 @@ class Reassemble(Job):
         self.dataset = dataset
         self.dependencies = joblist
         self.output = output
+        self.already_done = True
 
     def command(self):
         return ['./reassemble.sh', self.dataset,
@@ -70,6 +77,7 @@ class Reassemble(Job):
 class Subimage_ProbabilityMap(Job):
     def __init__(self, raw_image, idx, xlo, ylo, xhi, yhi, xlo_core, ylo_core, xhi_core, yhi_core):
         Job.__init__(self)
+        self.already_done = True
         self.raw_image = raw_image
         self.dependencies = []
         self.coords = [str(c) for c in (xlo, ylo, xhi, yhi)]
@@ -84,6 +92,7 @@ class Subimage_ProbabilityMap(Job):
 class Subimage_SegmentedSlice(Job):
     def __init__(self, idx, probability_map, raw_image, xlo, ylo, xhi, yhi, xlo_core, ylo_core, xhi_core, yhi_core):
         Job.__init__(self)
+        self.already_done = True
         self.probability_map = probability_map
         self.raw_image = raw_image
         self.dependencies = [self.probability_map]
@@ -202,9 +211,9 @@ if __name__ == '__main__':
     segmentation_subimage_size = 1024
     segmentation_subimage_halo = 128
 
-    block_xy_size = 384
     block_xy_halo = 64
-    block_z_size = 20
+    block_xy_size = 256 - (2 * 64)
+    block_z_size = 15
     block_z_halo = 6
 
     assert 'CONNECTOME' in os.environ
@@ -259,6 +268,8 @@ if __name__ == '__main__':
 
     # Window fuse all blocks
     fused_blocks = dict((idxs, FusedBlock(block, idxs, num)) for num, (idxs, block) in enumerate(blocks.iteritems()))
+    Job.run_all()
+    sys.exit(0)
 
     # Pairwise match all blocks.
     #

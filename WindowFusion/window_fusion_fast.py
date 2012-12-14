@@ -19,11 +19,14 @@ size_compensation_factor = 0.9
 # NB - both these functions should accept array arguments
 # weights for segments
 def segment_worth(area):
+    print "computing seg worth", type(area)
     return area ** size_compensation_factor
 # weights for links
 def link_worth(area1, area2, area_overlap):
+    print "computing link worth", type(area1)
     min_area = np.minimum(area1, area2)
     max_fraction = area_overlap / np.maximum(area1, area2)
+    print "about to return link"
     return max_fraction * (min_area ** size_compensation_factor)
 
 
@@ -131,7 +134,9 @@ def build_model(areas, exclusions, overlaps, bottom_segments):
     print "  links", len(link_1st_segidx)
     # Create variables for the segments and links
     segment_vars = model.new(len(segments), vtype='binary')
+    print "created segments"
     link_vars = model.new(len(link_1st_segidx), vtype='binary')
+    print "created links"
 
     # set up the objective
     objective = segment_vars.mult(segment_worth(segment_areas)).sum() + \
@@ -198,10 +203,12 @@ if __name__ == '__main__':
     print "Labeling took", int(time.time() - st), "seconds"
 
     areas, exclusions, overlaps = count_overlaps(depth, numsegs, labels)
+    if 0 not in areas:
+        areas[0] = 0
 
     st = time.time()
     bottom_segments = reduce(operator.ior, [set(labels[0, D, :, :].flat) for D in range(depth)])
-    model, objective, start, segment_vars, link_vars, link_segments_pairs = build_model(areas, exclusions, overlaps, bottom_segments)
+
     print "Building MILP took", int(time.time() - st), "seconds"
 
     # free memory

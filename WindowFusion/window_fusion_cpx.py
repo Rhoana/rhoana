@@ -191,7 +191,8 @@ if __name__ == '__main__':
     st = time.time()
 
     # Precompute labels, store in HDF5
-    output_path = sys.argv[2]
+    block_offset = int(sys.argv[2]) << 32
+    output_path = sys.argv[3]
     lf = h5py.File(output_path + '_partial', 'w')
     chunking = list(segmentations.shape)
     chunking[0] = 1
@@ -218,12 +219,12 @@ if __name__ == '__main__':
     print "Solving took", int(time.time() - st), "seconds"
 
     # Build the map from incoming label to linked labels
-    segment_map = np.array(model.solution.get_variables(0, num_segments - 1)].astype(int32)
+    segment_map = np.array(model.solution.get_values(0, num_segments - 1)).astype(np.int32)
     print segment_map.sum(), "active segments"
     segment_map *= np.arange(segment_map.shape[0])  # map every on segment to itself
 
     # Process links
-    links_vars = np.array(model.solution.get_variables()).astype(np.bool)
+    link_vars = np.array(model.solution.get_values()).astype(np.bool)
     link_vars[:num_segments] = 0
     print link_vars.sum(), "active links"
     for linkidx in np.nonzero(link_vars)[0]:
@@ -249,7 +250,7 @@ if __name__ == '__main__':
     # Condense results
     out_labels = lf.create_dataset('labels', [depth, width, height], dtype=np.int32, chunks=tuple(chunking[1:]), compression='gzip')
     for D in range(depth):
-        out_labels[D, :, :] = 0
+        out_labels[D, :, :] = block_offset
         for Seg in range(numsegs):
             out_labels[D, :, :] += labels[Seg, D, :, :]
 
@@ -258,4 +259,4 @@ if __name__ == '__main__':
         os.unlink(output_path)
 
     os.rename(output_path+ '_partial', output_path)
-    print "Successfully wrote", sys.argv[2]
+    print "Successfully wrote", sys.argv[3]
