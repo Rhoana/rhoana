@@ -201,7 +201,8 @@ if __name__ == '__main__':
     chunking = list(segmentations.shape)
     chunking[0] = 1
     chunking[1] = 1
-    labels = lf.create_dataset('seglabels', segmentations.shape, dtype=np.int32, chunks=tuple(chunking), compression='gzip')
+    # We have to ues int64 for the pandas hash table implementation
+    labels = lf.create_dataset('seglabels', segmentations.shape, dtype=np.int64, chunks=tuple(chunking), compression='gzip')
     offset = 0
     for D in range(depth):
         for Seg in range(numsegs):
