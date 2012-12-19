@@ -5,7 +5,7 @@ import subprocess
 import datetime
 from itertools import product
 
-FUSED_QUEUE = "short_serial"
+FUSED_QUEUE = "normal_serial"
 
 class Job(object):
     all_jobs = []
@@ -29,7 +29,7 @@ class Job(object):
         subprocess.check_call(["bsub",
                                "-Q", "all ~0",
                                "-r",
-                               "-R", "rusage[mem=6000]",
+                               "-R", "rusage[mem=10000]",
                                "-g", "/diced_connectome",
                                "-q", FUSED_QUEUE if "FusedBlock" in self.name else "short_serial" ,
                                "-J", self.name,
@@ -52,6 +52,10 @@ class JobSplit(object):
         self.job = job
         self.idx = idx
         self.name = job.name
+
+    @property
+    def already_done(self):
+        return self.job.already_done
 
     @property
     def output(self):
@@ -110,6 +114,7 @@ class Block(Job):
         Job.__init__(self)
         self.segmented_slices = segmented_slices
         self.dependencies = segmented_slices
+        self.already_done = False
         self.args = [str(a) for a in args]
         self.output = os.path.join('dicedblocks', 'block_%d_%d_%d.hdf5' % indices)
 
@@ -269,8 +274,7 @@ if __name__ == '__main__':
     # Window fuse all blocks
     fused_blocks = dict((idxs, FusedBlock(block, idxs, num)) for num, (idxs, block) in enumerate(blocks.iteritems()))
     Job.run_all()
-    sys.exit(0)
-
+    adsf
     # Pairwise match all blocks.
     #
     # We overwrite each block in fused_blocks (the python dict, not the file)
