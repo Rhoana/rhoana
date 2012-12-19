@@ -39,17 +39,10 @@ class timed(object):
         self.total_time += time.time() - start
         return val
 
-label_offsets = {}
-max_label = 0
-
 @timed
-def unique_labels(depth, seg, values):
-    global max_label
-    my_offset = label_offsets.setdefault((depth, seg), max_label)
+def unique_labels(depth, seg, values, offset):
     labels = label(values, output=np.int64)[0]
-    labels += (labels > 0) * my_offset
-    max_label = max(max_label, labels.max())
-    return labels
+    return labels + (labels > 0) * offset
 
 def count_overlaps(depth, numsegs, labels):
     areas = {}
@@ -208,14 +201,19 @@ if __name__ == '__main__':
     chunking = list(segmentations.shape)
     chunking[0] = 1
     chunking[1] = 1
-    labels = lf.create_dataset('seglabels', segmentations.shape, dtype=np.int64, chunks=tuple(chunking), compression='gzip')
+    labels = lf.create_dataset('seglabels', segmentations.shape, dtype=np.int32, chunks=tuple(chunking), compression='gzip')
+    offset = 0
     for D in range(depth):
         for Seg in range(numsegs):
-            labels[Seg, D, :, :] = unique_labels(D, Seg, segmentations[Seg, D, :, :][...])
+            temp = unique_labels(D, Seg, segmentations[Seg, D, :, :][...], offset)
+            labels[Seg, D, :, :] = temp
+            offset = temp.max()
+            assert offset < 2**31
     print "Labeling took", int(time.time() - st), "seconds"
 
     areas, exclusions, overlaps = count_overlaps(depth, numsegs, labels)
     num_segments = len(areas)
+    assert num_segments == offset
 
     st = time.time()
     model, links_to_segs = build_model(areas, exclusions, overlaps)
@@ -230,9 +228,9 @@ if __name__ == '__main__':
     print "Solving took", int(time.time() - st), "seconds"
 
     # Build the map from incoming label to linked labels
-    segment_map = np.array(model.solution.get_values(0, num_segments - 1)).astype(np.int32)
+    segment_map = np.array(model.solution.get_values(0, num_segments - 1)).astype(np.uint64)
     print segment_map.sum(), "active segments"
-    segment_map *= np.arange(segment_map.shape[0])  # map every on segment to itself
+    segment_map *= np.arange(segment_map.shape[0])  # map every active segment to itself
 
     # Process links
     link_vars = np.array(model.solution.get_values()).astype(np.bool)
@@ -253,17 +251,12 @@ if __name__ == '__main__':
         else:
             segment_map[idx] = segment_map[segment_map[idx]]
 
-    # Apply map to labels
-    for D in range(depth):
-        for Seg in range(numsegs):
-            labels[Seg, D, :, :] = segment_map[labels[Seg, D, :, :][...]]
-
     # Condense results
     out_labels = lf.create_dataset('labels', [depth, width, height], dtype=np.uint64, chunks=tuple(chunking[1:]), compression='gzip')
     for D in range(depth):
         out_labels[D, :, :] = block_offset
         for Seg in range(numsegs):
-            out_labels[D, :, :] += labels[Seg, D, :, :]
+            out_labels[D, :, :] |= segment_map[labels[Seg, D, :, :]]
 
     # move to final location
     if os.path.exists(output_path):
