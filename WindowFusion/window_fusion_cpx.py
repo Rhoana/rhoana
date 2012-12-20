@@ -214,7 +214,8 @@ if __name__ == '__main__':
 
     areas, exclusions, overlaps = count_overlaps(depth, numsegs, labels)
     num_segments = len(areas)
-    assert num_segments == offset
+    print num_segments, offset
+    assert num_segments == offset + 1  # areas includes an area for 0
 
     st = time.time()
     model, links_to_segs = build_model(areas, exclusions, overlaps)
@@ -229,9 +230,15 @@ if __name__ == '__main__':
     print "Solving took", int(time.time() - st), "seconds"
 
     # Build the map from incoming label to linked labels
-    segment_map = np.array(model.solution.get_values(0, num_segments - 1)).astype(np.uint64)
-    print segment_map.sum(), "active segments"
-    segment_map *= np.arange(segment_map.shape[0])  # map every active segment to itself
+    on_segments = np.array(model.solution.get_values(range(num_segments))).astype(np.bool)
+    print on_segments.sum(), "active segments"
+    segment_map = np.arange(num_segments, dtype=np.uint64)
+    segment_map[~ on_segments] = 0
+
+    # Sanity check
+    areas, exclusions, overlaps = count_overlaps(depth, numsegs, labels)
+    for s1, s2 in exclusions:
+        assert not (on_segments[s1] and on_segments[s2])
 
     # Process links
     link_vars = np.array(model.solution.get_values()).astype(np.bool)
@@ -239,6 +246,8 @@ if __name__ == '__main__':
     print link_vars.sum(), "active links"
     for linkidx in np.nonzero(link_vars)[0]:
         l1, l2 = links_to_segs[linkidx]
+        assert on_segments[l1]
+        assert on_segments[l2]
         segment_map[l2] = l1  # link higher to lower
 
     # set background to 0
@@ -252,11 +261,14 @@ if __name__ == '__main__':
         else:
             segment_map[idx] = segment_map[segment_map[idx]]
 
+    assert (segment_map > 0).sum() == on_segments.sum()
+    segment_map[segment_map > 0] |= block_offset
+
     # Condense results
     out_labels = lf.create_dataset('labels', [depth, width, height], dtype=np.uint64, chunks=tuple(chunking[1:]), compression='gzip')
     for D in range(depth):
-        out_labels[D, :, :] = block_offset
         for Seg in range(numsegs):
+            assert (out_labels[D, :, :][...].astype(bool) * segment_map[labels[Seg, D, :, :]].astype(bool)).sum() == 0
             out_labels[D, :, :] |= segment_map[labels[Seg, D, :, :]]
 
     # move to final location
