@@ -71,8 +71,8 @@ def count_overlaps(depth, numsegs, labels):
                     np.add(labels1, labels2, labels2)
                     keys, counts = pandas.lib.value_count_int64(labels2.ravel())
                     for k in keys:
-                        idx1 = int(k & 0xffff)
-                        idx2 = int(k >> 32)
+                        idx1 = int(k >> 32)
+                        idx2 = int(k & 0xffff)
                         if idx1 and idx2:
                             yield idx1, idx2
 
@@ -88,8 +88,8 @@ def count_overlaps(depth, numsegs, labels):
                     np.add(labels1, labels2, labels2)
                     keys, counts = pandas.lib.value_count_int64(labels2.ravel())
                     for k, c in zip(keys, counts):
-                        idx1 = int(k & 0xffff)
-                        idx2 = int(k >> 32)
+                        idx1 = int(k >> 32)
+                        idx2 = int(k & 0xffff)
                         if idx1 and idx2:
                             yield idx1, idx2, link_worth(float(areas[idx1]), float(areas[idx2]), float(c))
 
@@ -249,6 +249,7 @@ if __name__ == '__main__':
         assert on_segments[l1]
         assert on_segments[l2]
         segment_map[l2] = l1  # link higher to lower
+        print "linked", l2, "to", l1
 
     # set background to 0
     segment_map[0] = 0
@@ -263,6 +264,10 @@ if __name__ == '__main__':
 
     assert (segment_map > 0).sum() == on_segments.sum()
     segment_map[segment_map > 0] |= block_offset
+
+    for linkidx in np.nonzero(link_vars)[0]:
+        l1, l2 = links_to_segs[linkidx]
+        assert segment_map[l1] == segment_map[l2]
 
     # Condense results
     out_labels = lf.create_dataset('labels', [depth, width, height], dtype=np.uint64, chunks=tuple(chunking[1:]), compression='gzip')
