@@ -36,7 +36,7 @@ seg_prefix = 'C:\dev\datasets\conn\main_dataset\ac3train\diced_xy=512_z=32_xyOv=
 
 %Small dicing (256)
 %result_list = {'res_from_SmallDice_PF'};
-%result_list = {'res_from_SmDi_J2_PF'}; %More joining - works best on test 
+%result_list = {'res_from_SmDi_J2_PF'}; %More joining - works well on test (not so good on the full cube)
 %result_list = {'res_from_SmDi_J1_scf085_PF'};
 %result_list = {'res_from_SmDi_J1_scf08_PF'};
 
@@ -44,11 +44,14 @@ seg_prefix = 'C:\dev\datasets\conn\main_dataset\ac3train\diced_xy=512_z=32_xyOv=
 %result_list = {'res_from_MedDi_scf09_PF'};
 
 %Large dicing (512)
-result_list = {'res_from_sept_14_scf09_PF'};
+%result_list = {'res_from_sept_14_scf09_PF'};
 
 %Good Branching 512
 %result_list = {'res_from_ODY_sept_27_PF'};
-%result_list = {'res_from_sept_30_minotrC_PF'};
+%result_list = {'res_from_sept_30_minotrC_PF'}; % This is the best result (so far) for training data
+
+result_list = {'res_from_Dec19_0925_60_PF'};
+%result_list = {'res_from_Dec19_09_60_PF'};
 
 % result_list = {'res_from_sept_14_scf095_mop0_PF', ...
 %     'res_from_sept_14_scf095_mop1000_PF', ...

@@ -9,7 +9,8 @@ dice_string = 'diced_xy=512_z=32_xyOv=128_zOv=12_dwnSmp=1';
 %result_name = 'res_from_sept_14_seg60_scf095_PF';
 %result_name = 'res_from_sept_14_seg60_scf0975_PF';
 %result_name = 'res_from_sept_30_minotrC_PF';
-result_name = 'res_from_0ct02_PF';
+result_name = 'res_from_J1_scf08_PF';
+%result_name = 'res_from_0ct02_PF';
 
 nresult = 1;
 
