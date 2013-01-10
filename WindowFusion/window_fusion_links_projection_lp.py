@@ -9,7 +9,7 @@ import numpy as np
 from scipy.ndimage.measurements import label
 import h5py
 
-import hashtable
+import fast64counter
 
 ##################################################
 # Parameters
@@ -47,7 +47,7 @@ def unique_labels(depth, seg, values, offset):
 def count_overlaps(depth, numsegs, labels):
     st = time.time()
 
-    htable = hashtable.ValueCountInt64()
+    htable = fast64counter.ValueCountInt64()
     # Count areas of each label
     for D in range(depth):
         for Seg in range(numsegs):
@@ -72,9 +72,9 @@ def count_overlaps(depth, numsegs, labels):
                 yield excl
 
     def overlaps():
+        overlap_areas = fast64counter.ValueCountInt64()
         for D in range(depth - 1):
             print "depth", D
-            overlap_areas = hashtable.ValueCountInt64()
             for xpos in range(0, labels.shape[2], chunksize):
                 for ypos in range(0, labels.shape[3], chunksize):
                     subimages_d1 = [labels[Seg, D, xpos:(xpos + chunksize), ypos:(ypos + chunksize)][...].ravel().astype(np.int32) for Seg in range(numsegs)]
@@ -89,6 +89,7 @@ def count_overlaps(depth, numsegs, labels):
         idxs1 = idxs1[mask]
         idxs2 = idxs2[mask]
         overlap_areas = overlap_areas[mask]
+        print len(idxs1), "Overlaps"
         for idx1, idx2, overlap_area in zip(idxs1, idxs2, overlap_areas):
             yield idx1, idx2, link_worth(float(areas[idx1]), float(areas[idx2]), float(overlap_area))
 
