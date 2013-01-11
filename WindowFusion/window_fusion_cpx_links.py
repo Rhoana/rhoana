@@ -11,6 +11,7 @@ import pandas
 
 import cplex
 from collections import defaultdict
+import fast64counter
 
 
 ##################################################
@@ -27,8 +28,7 @@ def segment_worth(area):
 def link_worth(area1, area2, area_overlap):
     min_area = np.minimum(area1, area2)
     max_fraction = area_overlap / np.maximum(area1, area2)
-    return max_fraction * (min_area ** size_compensation_factor)
-
+    return max_fraction * (min_area ** size_compensation_factor) + (segment_worth(area1) + segment_worth(area2)) / 2
 
 class timed(object):
     def __init__(self, f):
@@ -47,17 +47,20 @@ def unique_labels(depth, seg, values, offset):
     return labels + (labels > 0) * offset
 
 def count_overlaps(depth, numsegs, labels):
-    areas = {}
-
     st = time.time()
 
+    htable = fast64counter.ValueCountInt64()
     # Count areas of each label
     for D in range(depth):
         for Seg in range(numsegs):
             lbls = labels[Seg, D, :, :][...]
-            keys, counts = pandas.lib.value_count_int64(lbls.ravel())
-            areas.update(zip(keys, counts))
+            htable.add_values(lbls.ravel())
+    keys, areas = htable.get_counts()
+    areas = areas[np.argsort(keys)]
     areas[0] = 0
+
+    # sanity check
+    assert np.all(np.sort(keys) == np.arange(len(keys)))
 
     def exclusions():
         for D in range(depth):
@@ -71,27 +74,30 @@ def count_overlaps(depth, numsegs, labels):
                 yield excl
 
     def overlaps():
+        overlap_areas = fast64counter.ValueCountInt64()
         for D in range(depth - 1):
             print "depth", D
-            overlap_areas = defaultdict(int)
             for xpos in range(0, labels.shape[2], chunksize):
                 for ypos in range(0, labels.shape[3], chunksize):
-                    subimages_d1 = [labels[Seg, D, xpos:(xpos + chunksize), ypos:(ypos + chunksize)][...].ravel() for Seg in range(numsegs)]
-                    subimages_d2 = [labels[Seg, D + 1, xpos:(xpos + chunksize), ypos:(ypos + chunksize)][...].ravel() for Seg in range(numsegs)]
+                    subimages_d1 = [labels[Seg, D, xpos:(xpos + chunksize), ypos:(ypos + chunksize)][...].ravel().astype(np.int32) for Seg in range(numsegs)]
+                    subimages_d2 = [labels[Seg, D + 1, xpos:(xpos + chunksize), ypos:(ypos + chunksize)][...].ravel().astype(np.int32) for Seg in range(numsegs)]
                     for s1 in subimages_d1:
                         for s2 in subimages_d2:
-                            keys, counts = pandas.lib.value_count_int64(((s1 << 32) + s2).ravel())
-                            idxs1 = (keys >> 32)
-                            idxs2 = (keys & 0xffffffff)
-                            mask = (idxs1 > 0) & (idxs2 > 0)
-                            for idx1, idx2, c in zip(idxs1[mask], idxs2[mask], counts[mask]):
-                                overlap_areas[idx1, idx2] += c
-            for (idx1, idx2), c in overlap_areas.iteritems():
-                yield idx1, idx2, link_worth(float(areas[idx1]), float(areas[idx2]), float(c))
+                            overlap_areas.add_values_32(s1, s2)
+        combined_idxs, overlap_areas = overlap_areas.get_counts()
+        idxs1 = combined_idxs >> 32
+        idxs2 = combined_idxs & 0xffffffff
+        mask = (idxs1 > 0) & (idxs2 > 0)
+        idxs1 = idxs1[mask]
+        idxs2 = idxs2[mask]
+        overlap_areas = overlap_areas[mask]
+        print len(idxs1), "Overlaps"
+        return idxs1, idxs2, link_worth(areas[idxs1], areas[idxs2], overlap_areas)
 
-    print "Area counting took", int(time.time() - st), "seconds"
+    _overlaps = overlaps()
+    print "Area counting and overlaps took", int(time.time() - st), "seconds"
 
-    return areas, exclusions(), overlaps()
+    return areas, exclusions(), _overlaps
 
 def build_model(areas, exclusions, overlaps):
     ##################################################
@@ -101,27 +107,34 @@ def build_model(areas, exclusions, overlaps):
 
     st = time.time()
 
-    # Find all segments and sizes
-    segments, segment_areas = zip(*sorted(areas.items()))
-    segments = np.array(segments)
-    segment_areas = np.array(segment_areas, dtype=float)
-
-    # sanity checking - check all segments present
-    assert np.all((segments[1:] - segments[:-1]) == 1)
-    # needed for indexing
-    assert segments[0] == 0
-
     # Build the LP
     model = cplex.Cplex()
 
-    num_segments = len(segments)
+    num_segments = len(areas)
     print "  segments", num_segments
     # Create variables for the segments and links
     model.variables.add(lb = [0] * num_segments,
                         ub = [1] * num_segments,
                         types = ["B"] * num_segments)
 
-    print "Adding exclusions"
+    print "  Adding links"
+    # add links and link constraints
+    uplinksets = defaultdict(list)
+    downlinksets = defaultdict(list)
+    link_to_segs = {}
+    idxs1, idxs2, weights = overlaps
+    base_link_idx = model.variables.get_num()
+    model.variables.add(obj = weights,
+                        lb = np.zeros_like(idxs1, dtype=np.int32),
+                        ub = np.ones_like(idxs1, dtype=np.int32),
+                        types = "B" * len(idxs1))
+    for linkidx, (idx1, idx2) in enumerate(zip(idxs1, idxs2)):
+        uplinksets[idx1].append(linkidx + base_link_idx)
+        downlinksets[idx2].append(linkidx + base_link_idx)
+        link_to_segs[linkidx + base_link_idx] = (idx1, idx2)
+    print "    ", model.variables.get_num() - num_segments, "links"
+
+    print "  Adding exclusions"
     # Add exclusion constraints
     for exclusion_set in exclusions:
         indices = [int(i) for i in exclusion_set if i > 0]
@@ -131,29 +144,19 @@ def build_model(areas, exclusions, overlaps):
                                          senses = "L",
                                          rhs = [1])
 
-    print "finding links"
-    # add links and link constraints
-    uplinksets = {}
-    downlinksets = {}
-    link_to_segs = {}
-    for idx1, idx2, weight in overlaps:
-        linkidx = model.variables.get_num()
-        model.variables.add(obj = [weight], lb = [0], ub = [1], types = "B", names = ['link%d' % linkidx])
-        uplinksets[idx1] = uplinksets.get(idx1, []) + [linkidx]
-        downlinksets[idx2] = downlinksets.get(idx2, []) + [linkidx]
-        link_to_segs[linkidx] = (idx1, idx2)
-
-    print "found", model.variables.get_num() - len(segments), "links"
-    print "adding links"
-    for segidx, links in uplinksets.iteritems():
-        model.linear_constraints.add(lin_expr = [cplex.SparsePair(ind = [int(segidx)] + links,
-                                                                  val = [1] + [-1] * len(links))],
+    print "  Adding link constraints"
+    for segidx in range(1, num_segments):
+        # activators
+        if uplinksets[segidx]:
+            links = uplinksets[segidx]
+            model.linear_constraints.add(lin_expr = [cplex.SparsePair(ind = [int(segidx)] + links,
+                                                                      val = [1] + [-1] * len(links))],
                                      senses = "G",
                                      rhs = [0])
-
-    for segidx, links in downlinksets.iteritems():
-        model.linear_constraints.add(lin_expr = [cplex.SparsePair(ind = [int(segidx)] + links,
-                                                                  val = [1] + [-1] * len(links))],
+        if downlinksets[segidx]:
+            links = downlinksets[segidx]
+            model.linear_constraints.add(lin_expr = [cplex.SparsePair(ind = [int(segidx)] + links,
+                                                                      val = [1] + [-1] * len(links))],
                                      senses = "G",
                                      rhs = [0])
 
