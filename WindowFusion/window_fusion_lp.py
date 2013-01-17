@@ -10,7 +10,6 @@ from scipy.ndimage.measurements import label as ndimage_label
 import h5py
 import pylab
 
-import fast64counter
 import overlaps
 
 DEBUG = True
