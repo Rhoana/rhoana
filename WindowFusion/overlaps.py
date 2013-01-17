@@ -32,7 +32,7 @@ def condense_labels(depth, numsegs, labels):
         for S in range(1, numsegs):
             projected &= chunklabels[S] > 0  # Mask out boundaries
         labeled_projected, num_found = ndimage_label(projected, output=np.int32)
-        labeled_projected += sublabel_offset
+        labeled_projected[labeled_projected > 0] += sublabel_offset
         sublabel_offset += num_found
         for sub in chunklabels:
             overlap_counter.add_values_pair32(labeled_projected.ravel(), sub.ravel())
@@ -47,14 +47,14 @@ def condense_labels(depth, numsegs, labels):
     # Reverse the map
     projected_to_label = defaultdict(list)
     for ol, plset in label_to_projected.iteritems():
-        projected_to_label[tuple(plset)].append(ol)
+        projected_to_label[tuple(sorted(plset))].append(ol)
 
     # Build a remapper to remove merged labels
     remapper = np.arange(np.max(original_labels) + 1)
     for original_label_list in projected_to_label.itervalues():
         # keep the first, but zero the rest
         if len(original_label_list) > 1:
-             remapper[original_label_list[1:]] = 0
+            remapper[original_label_list[1:]] = 0
 #             for l in original_label_list:
 #                 pylab.figure()
 #                 for s in range(numsegs):
