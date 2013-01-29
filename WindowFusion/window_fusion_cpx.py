@@ -138,6 +138,7 @@ if __name__ == '__main__':
             lf.close()
             sys.exit(0)
     except Exception, e:
+        print e
         pass
 
     condense_labels = timed(overlaps.condense_labels)
@@ -189,10 +190,11 @@ if __name__ == '__main__':
     segment_map = np.arange(num_segments, dtype=np.uint64)
     segment_map[~ on_segments] = 0
 
-    # Sanity check
-    areas, exclusions, links = overlaps.count_overlaps_exclusionsets(depth, numsegs, labels, link_worth)
-    for excl in exclusions:
-        assert sum(on_segments[s] for s in excl) <= 1
+    if DEBUG:
+        # Sanity check
+        areas, exclusions, links = overlaps.count_overlaps_exclusionsets(depth, numsegs, labels, link_worth)
+        for excl in exclusions:
+            assert sum(on_segments[s] for s in excl) <= 1
 
     # Process links
     link_vars = np.array(model.solution.get_values()).astype(np.bool)
