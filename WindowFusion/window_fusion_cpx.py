@@ -138,6 +138,7 @@ if __name__ == '__main__':
             lf.close()
             sys.exit(0)
     except Exception, e:
+        print e
         pass
 
     condense_labels = timed(overlaps.condense_labels)
