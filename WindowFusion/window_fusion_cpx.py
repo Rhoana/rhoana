@@ -71,7 +71,7 @@ def build_model(areas, exclusions, links):
     print "Adding exclusions"
     # Add exclusion constraints
     for ct, excl in enumerate(exclusions):
-        model.linear_constraints.add(lin_expr = [cplex.SparsePair(ind = list(excl),
+        model.linear_constraints.add(lin_expr = [cplex.SparsePair(ind = [int(i) for i in excl],
                                                                   val = [1] * len(excl))],
                                      senses = "L",
                                      rhs = [1])
