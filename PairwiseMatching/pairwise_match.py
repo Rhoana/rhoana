@@ -109,7 +109,7 @@ for l1, l2, overlap_area in zip(overlap_labels1, overlap_labels2, overlap_areas)
           (overlap_area > minoverlap_single_ratio * areas[l2]) or
           ((overlap_area > minoverlap_dual_ratio * areas[l1]) and
            (overlap_area > minoverlap_dual_ratio * areas[l2]))))):
-        to_merge.append((l1, l2))
+        to_merge.append((inverse[l1], inverse[l2]))
     else:
         to_steal.append((overlap_area, l1, l2))
 
@@ -170,8 +170,8 @@ if Debug:
     block1data = block1[...]
     block2data = block2[...]
     for l1, l2 in to_merge:
-        block1data[block1data == inverse[l1]] = inverse[l2]
-        block2data[block2data == inverse[l1]] = inverse[l2]
+        block1data[block1data == l1] = l2
+        block2data[block2data == l1] = l2
 
     import pylab
     pylab.imshow(block1data[0, :, :] % 13)
@@ -190,12 +190,13 @@ outblock1[...] = block1[...]
 outblock2[...] = block2[...]
 
 to_merge = np.array(to_merge).reshape((-1, 2))
+
 if 'joins' in bl1f:
     joins = np.vstack((bl1f['joins'][...], to_merge))
 else:
     joins = to_merge
 if joins.size > 0:
-    j = out1.create_dataset('/joins', joins.shape, np.int64)
+    j = out1.create_dataset('/joins', joins.shape, np.uint64)
     j[...] = joins
 
 # move to final location
