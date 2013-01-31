@@ -6,21 +6,24 @@ import shutil
 if __name__ == '__main__':
     outf = h5py.File(sys.argv[-1] + '_partial', 'w')
 
-    outjoins = np.zeros((2, 0), dtype=np.uint64)
+    outjoins = np.zeros((0, 2), dtype=np.uint64)
     for filename in sys.argv[1:-1]:
-        f = h5py.File(filename)
+        print filename
+        f = h5py.File(filename, 'r')
         if 'joins' in f:
             print filename, f['joins'][...]
-            outjoins = np.hstack((outjoins, f['joins'][...]))
+            outjoins = np.vstack((outjoins, f['joins'][...]))
         else:
             print "no joins in", filename
         if 'labels' in f:
             # write an identity map for the labels
             labels = np.unique(f['labels'][...])
             labels = labels[labels > 0]
-            outjoins = np.hstack((outjoins, np.vstack((labels, labels))))
+            labels = labels.reshape((-1, 1))
+            print labels.shape, outjoins.shape
+            outjoins = np.vstack((outjoins, np.hstack((labels, labels))))
 
-    if outjoins.shape[1] > 0:
+    if outjoins.shape[0] > 0:
         ds = outf.create_dataset('joins', outjoins.shape, outjoins.dtype)
         ds[...] = outjoins
     outf.close()

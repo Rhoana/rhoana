@@ -18,5 +18,7 @@ if __name__ == '__main__':
 
     l = outf.create_dataset('labels', blockdata.shape, blockdata.dtype)
     l[:, :, :] = blockdata
+    print "Wrote remapped block of size", l.shape
+    outf.flush()
     outf.close()
     shutil.move(sys.argv[-1] + '_partial', sys.argv[-1])

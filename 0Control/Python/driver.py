@@ -5,7 +5,7 @@ import subprocess
 import datetime
 from itertools import product
 
-FUSED_QUEUE = "short_serial"
+FUSED_QUEUE = "normal_serial"
 
 class Job(object):
     all_jobs = []

@@ -13,7 +13,7 @@ if __name__ == '__main__':
     joins = infile['joins'][...]
 
     # put every pair in the remap
-    for v1, v2 in joins.T:
+    for v1, v2 in joins:
         dest = min(remap.get(v1, v1), remap.get(v2, v2))
         remap[v1] = dest
         remap[v2] = dest

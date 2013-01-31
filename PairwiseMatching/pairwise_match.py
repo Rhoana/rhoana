@@ -1,12 +1,13 @@
 import sys
 from collections import defaultdict
 import numpy as np
+import os
 
 import h5py
 import fast64counter
 
 
-Debug = True
+Debug = False
 
 block1_path, block2_path, direction, halo_size, outblock1_path, outblock2_path = sys.argv[1:]
 direction = int(direction)
@@ -184,13 +185,15 @@ out1 = h5py.File(outblock1_path + '_partial', 'w')
 out2 = h5py.File(outblock2_path + '_partial', 'w')
 
 outblock1 = out1.create_dataset('/labels', block1.shape, block1.dtype, chunks=block1.chunks)
-outblock2 = out1.create_dataset('/labels', block2.shape, block2.dtype, chunks=block2.chunks)
+outblock2 = out2.create_dataset('/labels', block2.shape, block2.dtype, chunks=block2.chunks)
 outblock1[...] = block1[...]
 outblock2[...] = block2[...]
+
+to_merge = np.array(to_merge).reshape((-1, 2))
 if 'joins' in bl1f:
-    joins = np.vstack(bl1f['joins'][...], to_merge)
+    joins = np.vstack((bl1f['joins'][...], to_merge))
 else:
-    joins = np.array(to_merge)
+    joins = to_merge
 if joins.size > 0:
     j = out1.create_dataset('/joins', joins.shape, np.int64)
     j[...] = joins
