@@ -44,7 +44,8 @@ print 'Running pairwise matching', " ".join(sys.argv[1:])
 # Extract overlapping regions
 bl1f = h5py.File(block1_path)
 block1 = bl1f['labels']
-block2 = h5py.File(block2_path)['labels']
+bl2f = h5py.File(block2_path)
+block2 = bl2f['labels']
 assert block1.size == block2.size
 
 lo_block1 = [0, 0, 0];
@@ -198,6 +199,11 @@ else:
 if joins.size > 0:
     j = out1.create_dataset('/joins', joins.shape, np.uint64)
     j[...] = joins
+
+if 'joins' in bl2f:
+    joins = bl2f['joins']
+    j = out2.create_dataset('/joins', joins.shape, np.uint64)
+    j[...] = joins[...]
 
 # move to final location
 if os.path.exists(outblock1_path):
