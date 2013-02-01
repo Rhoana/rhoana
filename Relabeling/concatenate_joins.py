@@ -10,18 +10,16 @@ if __name__ == '__main__':
     for filename in sys.argv[1:-1]:
         print filename
         f = h5py.File(filename, 'r')
+        # one or the other
+        assert ('joins' in f) != ('labels' in f)
         if 'joins' in f:
-            print filename, f['joins'][...]
-            outjoins = np.vstack((outjoins, f['joins'][...]))
+            outjoins = np.vstack((outjoins, f['joins'][...].astype(np.uint64)))
         else:
-            print "no joins in", filename
-        if 'labels' in f:
             # write an identity map for the labels
             labels = np.unique(f['labels'][...])
             labels = labels[labels > 0]
             labels = labels.reshape((-1, 1))
-            print labels.shape, outjoins.shape
-            outjoins = np.vstack((outjoins, np.hstack((labels, labels))))
+            outjoins = np.vstack((outjoins, np.hstack((labels, labels)).astype(np.uint64)))
 
     if outjoins.shape[0] > 0:
         ds = outf.create_dataset('joins', outjoins.shape, outjoins.dtype)

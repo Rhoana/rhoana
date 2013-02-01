@@ -25,7 +25,7 @@ class Job(object):
                 os.mkdir(os.path.dirname(f))
         if self.already_done:
             return
-        print "RUN", self.command()
+        print "RUN", self.name, self.command()
         subprocess.check_call(["bsub",
                                "-Q", "all ~0",
                                "-r",
@@ -112,9 +112,9 @@ class Subimage_SegmentedSlice(Job):
 class Block(Job):
     def __init__(self, segmented_slices, indices, *args):
         Job.__init__(self)
+        self.already_done = False
         self.segmented_slices = segmented_slices
         self.dependencies = segmented_slices
-        self.already_done = False
         self.args = [str(a) for a in args]
         self.output = os.path.join('dicedblocks', 'block_%d_%d_%d.hdf5' % indices)
 
@@ -124,6 +124,7 @@ class Block(Job):
 class FusedBlock(Job):
     def __init__(self, block, indices, global_block_number):
         Job.__init__(self)
+        self.already_done = False
         self.block = block
         self.global_block_number = global_block_number
         self.dependencies = [block]
@@ -139,6 +140,7 @@ class PairwiseMatching(Job):
     def __init__(self, fusedblock1, fusedblock2, direction, even_or_odd, halo_width):
         Job.__init__(self)
         self.direction = direction
+        self.already_done = False
         self.even_or_odd = even_or_odd
         self.halo_width = halo_width
         self.dependencies = [fusedblock1, fusedblock2]
@@ -155,6 +157,7 @@ class JoinConcatenation(Job):
     def __init__(self, outfilename, inputs):
         Job.__init__(self)
         self.dependencies = inputs
+        self.already_done = True
         self.output = os.path.join('joins', outfilename)
 
     def command(self):
@@ -165,6 +168,7 @@ class JoinConcatenation(Job):
 class GlobalRemap(Job):
     def __init__(self, outfilename, joinjob):
         Job.__init__(self)
+        self.already_done = True
         self.dependencies = [joinjob]
         self.joinfile = joinjob.output
         self.output = os.path.join('joins', outfilename)
@@ -175,6 +179,7 @@ class GlobalRemap(Job):
 class RemapBlock(Job):
     def __init__(self, blockjob, build_remap_job, indices):
         Job.__init__(self)
+        self.already_done = True
         self.dependencies = [blockjob, build_remap_job]
         self.inputfile = blockjob.output
         self.mapfile = build_remap_job.output
@@ -273,8 +278,6 @@ if __name__ == '__main__':
 
     # Window fuse all blocks
     fused_blocks = dict((idxs, FusedBlock(block, idxs, num)) for num, (idxs, block) in enumerate(blocks.iteritems()))
-    Job.run_all()
-    adsf
     # Pairwise match all blocks.
     #
     # We overwrite each block in fused_blocks (the python dict, not the file)
