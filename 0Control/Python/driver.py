@@ -164,7 +164,7 @@ class JoinConcatenation(Job):
     def __init__(self, outfilename, inputs):
         Job.__init__(self)
         self.dependencies = inputs
-        self.already_done = False
+        self.already_done = True
         self.output = os.path.join('joins', outfilename)
 
     def command(self):
@@ -175,7 +175,7 @@ class JoinConcatenation(Job):
 class GlobalRemap(Job):
     def __init__(self, outfilename, joinjob):
         Job.__init__(self)
-        self.already_done = False
+        self.already_done = True
         self.dependencies = [joinjob]
         self.joinfile = joinjob.output
         self.output = os.path.join('joins', outfilename)
@@ -186,7 +186,7 @@ class GlobalRemap(Job):
 class RemapBlock(Job):
     def __init__(self, blockjob, build_remap_job, indices):
         Job.__init__(self)
-        self.already_done = False
+        self.already_done = True
         self.dependencies = [blockjob, build_remap_job]
         self.inputfile = blockjob.output
         self.mapfile = build_remap_job.output
@@ -199,11 +199,11 @@ class RemapBlock(Job):
 class CopyImage(Job):
     def __init__(self, input, idx):
         Job.__init__(self)
-        self.already_done = False
+        self.already_done = True
         self.dependencies = []
         self.inputfile = input
         self.idx = idx
-        self.output = os.path.join('output_images', 'image_%05d.tif' % indices)
+        self.output = os.path.join('output_images', 'image_%05d.tif' % idx)
 
     def command(self):
         return ['/bin/cp', self.inputfile, self.output]
@@ -211,7 +211,7 @@ class CopyImage(Job):
 class ExtractLabelPlane(Job):
     def __init__(self, zplane, remapped_blocks, zoffset, image_size, xy_block_size):
         Job.__init__(self)
-        self.already_done = False
+        self.already_done = zplane > 1
         self.dependencies = remapped_blocks
         self.zoffset = zoffset
         self.image_size = image_size
@@ -363,9 +363,10 @@ if __name__ == '__main__':
 
     # finally, extract the images and output labels
     output_images = [CopyImage(i, idx) for idx, i in enumerate(images)]
+    max_zslab = max(remapped_blocks_by_plane.keys())
     output_labels = [ExtractLabelPlane(idx,
-                                       remapped_blocks_by_plane[idx / block_z_size],
-                                       idx - (idx / block_z_size),  # offset within block
+                                       remapped_blocks_by_plane[min(idx / block_z_size, max_zslab)],
+                                       idx - block_z_size * (idx / block_z_size),  # offset within block
                                        image_size, block_xy_size)
                      for idx, _ in enumerate(images)]
     Job.run_all()

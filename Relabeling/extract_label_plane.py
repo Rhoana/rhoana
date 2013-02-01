@@ -2,7 +2,7 @@ import os
 import sys
 import numpy as np
 import h5py
-from tiffany.TiffImagePlugin import *
+from libtiff import TIFF
 
 if __name__ == '__main__':
     # Parse arguments
@@ -19,6 +19,6 @@ if __name__ == '__main__':
         # Matlab order
         data = h5py.File(infile)['labels'][zoffset, :, :]
         sz = data.shape[-1]
-        output_image[xbase:xbase+sz, ybase:ybase+sz] = data
-    im = Image.fromarray(output_image, mode='I')
-    im.save(output_path)
+        output_image[ybase:ybase+sz, xbase:xbase+sz] = data
+    tif = TIFF.open(output_path, mode='w')
+    tif.write_image(output_image)
