@@ -159,6 +159,20 @@ outblock2 = out2.create_dataset('/labels', block2.shape, block2.dtype, chunks=bl
 outblock1[...] = inverse[packed_block1]
 outblock2[...] = inverse[packed_block2]
 
+# copy any previous merge tables to the new output
+if 'merges' in bl1f:
+    merges = bl1f['merges']
+    if len(to_merge):
+        merges = np.vstack((merges, to_merge))
+else:
+    merges = np.array(to_merge).astype(np.uint64)
+if merges.size > 0:
+    out1.create_dataset('/merges', merges.shape, merges.dtype)[...] = merges
+
+if 'merges' in bl2f:
+    out2.create_dataset('/merges', merges.shape, merges.dtype)[...] = bl2f['merges']
+
+
 if Debug:
     import pylab
     pylab.figure()
