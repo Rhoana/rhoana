@@ -4,6 +4,7 @@ import os
 import subprocess
 import datetime
 from itertools import product
+from collections import defaultdict
 
 FUSED_QUEUE = "normal_serial"
 
@@ -189,6 +190,7 @@ class RemapBlock(Job):
         self.dependencies = [blockjob, build_remap_job]
         self.inputfile = blockjob.output
         self.mapfile = build_remap_job.output
+        self.indices = indices
         self.output = os.path.join('relabeledblocks', 'block_%d_%d_%d.hdf5' % indices)
 
     def command(self):
@@ -201,7 +203,7 @@ class CopyImage(Job):
         self.dependencies = []
         self.inputfile = input
         self.idx = idx
-        self.output = os.path.join('output_images', 'image_%d.tif' % indices)
+        self.output = os.path.join('output_images', 'image_%05d.tif' % indices)
 
     def command(self):
         return ['/bin/cp', self.inputfile, self.output]
@@ -214,7 +216,7 @@ class ExtractLabelPlane(Job):
         self.zoffset = zoffset
         self.image_size = image_size
         self.xy_block_size = xy_block_size
-        self.output = os.path.join('output_labels', 'labels_%d.tif' % zplane)
+        self.output = os.path.join('output_labels', 'labels_%05d.tif' % zplane)
 
     def generate_args(self):
         for block in self.dependencies:
@@ -355,11 +357,14 @@ if __name__ == '__main__':
 
     # and apply it to every block
     remapped_blocks = [RemapBlock(fb, remap, idx) for idx, fb in fused_blocks.iteritems()]
+    remapped_blocks_by_plane = defaultdict(list)
+    for bl in remapped_blocks:
+        remapped_blocks_by_plane[bl.indices[2]] += [bl]
 
     # finally, extract the images and output labels
     output_images = [CopyImage(i, idx) for idx, i in enumerate(images)]
     output_labels = [ExtractLabelPlane(idx,
-                                       plane_join_lists[idx / block_z_size],
+                                       remapped_blocks_by_plane[idx / block_z_size],
                                        idx - (idx / block_z_size),  # offset within block
                                        image_size, block_xy_size)
                      for idx, _ in enumerate(images)]
