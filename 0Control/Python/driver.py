@@ -61,6 +61,10 @@ class JobSplit(object):
     def output(self):
         return self.job.output[self.idx]
 
+    @property
+    def indices(self):
+        return self.job.indices[self.idx]
+
 class Reassemble(Job):
     '''reassemble a diced job'''
     def __init__(self, dataset, output_sizes, joblist, output):
@@ -112,7 +116,7 @@ class Subimage_SegmentedSlice(Job):
 class Block(Job):
     def __init__(self, segmented_slices, indices, *args):
         Job.__init__(self)
-        self.already_done = False
+        self.already_done = True
         self.segmented_slices = segmented_slices
         self.dependencies = segmented_slices
         self.args = [str(a) for a in args]
@@ -124,10 +128,11 @@ class Block(Job):
 class FusedBlock(Job):
     def __init__(self, block, indices, global_block_number):
         Job.__init__(self)
-        self.already_done = False
+        self.already_done = True
         self.block = block
         self.global_block_number = global_block_number
         self.dependencies = [block]
+        self.indices = indices
         self.output = os.path.join('fusedblocks', 'fusedblock_%d_%d_%d.hdf5' % indices)
 
     def command(self):
@@ -140,9 +145,10 @@ class PairwiseMatching(Job):
     def __init__(self, fusedblock1, fusedblock2, direction, even_or_odd, halo_width):
         Job.__init__(self)
         self.direction = direction
-        self.already_done = False
+        self.already_done = True
         self.even_or_odd = even_or_odd
         self.halo_width = halo_width
+        self.indices = (fusedblock1.indices, fusedblock2.indices)
         self.dependencies = [fusedblock1, fusedblock2]
         outdir = 'pairwise_matches_%s_%s' % (['X', 'Y', 'Z',][direction], even_or_odd)
         self.output = (os.path.join(outdir, os.path.basename(fusedblock1.output)),
@@ -157,7 +163,7 @@ class JoinConcatenation(Job):
     def __init__(self, outfilename, inputs):
         Job.__init__(self)
         self.dependencies = inputs
-        self.already_done = True
+        self.already_done = False
         self.output = os.path.join('joins', outfilename)
 
     def command(self):
@@ -168,7 +174,7 @@ class JoinConcatenation(Job):
 class GlobalRemap(Job):
     def __init__(self, outfilename, joinjob):
         Job.__init__(self)
-        self.already_done = True
+        self.already_done = False
         self.dependencies = [joinjob]
         self.joinfile = joinjob.output
         self.output = os.path.join('joins', outfilename)
@@ -179,7 +185,7 @@ class GlobalRemap(Job):
 class RemapBlock(Job):
     def __init__(self, blockjob, build_remap_job, indices):
         Job.__init__(self)
-        self.already_done = True
+        self.already_done = False
         self.dependencies = [blockjob, build_remap_job]
         self.inputfile = blockjob.output
         self.mapfile = build_remap_job.output
@@ -187,6 +193,40 @@ class RemapBlock(Job):
 
     def command(self):
         return ['./remap_block.sh', self.inputfile, self.mapfile, self.output]
+
+class CopyImage(Job):
+    def __init__(self, input, idx):
+        Job.__init__(self)
+        self.already_done = False
+        self.dependencies = []
+        self.inputfile = input
+        self.idx = idx
+        self.output = os.path.join('output_images', 'image_%d.tif' % indices)
+
+    def command(self):
+        return ['/bin/cp', self.inputfile, self.output]
+
+class ExtractLabelPlane(Job):
+    def __init__(self, zplane, remapped_blocks, zoffset, image_size, xy_block_size):
+        Job.__init__(self)
+        self.already_done = False
+        self.dependencies = remapped_blocks
+        self.zoffset = zoffset
+        self.image_size = image_size
+        self.xy_block_size = xy_block_size
+        self.output = os.path.join('output_labels', 'labels_%d.tif' % zplane)
+
+    def generate_args(self):
+        for block in self.dependencies:
+            # XY corner followed by filename
+            yield str(block.indices[0] * self.xy_block_size)
+            yield str(block.indices[1] * self.xy_block_size)
+            yield block.output
+
+    def command(self):
+        return ['./extract_label_plane.sh', self.output, str(self.image_size), str(self.zoffset)] + \
+            list(self.generate_args())
+
 
 ###############################
 # Helper functions
@@ -295,7 +335,8 @@ if __name__ == '__main__':
                                               direction,  # matlab
                                               which_pairs,
                                               block_xy_halo if direction < 2 else block_z_halo)
-                        # we can safely overwrite because of nonoverlapping even/odd sets
+                        # we can safely overwrite (variables, not files)
+                        # because of nonoverlapping even/odd sets
                         fused_blocks[idx] = JobSplit(pw, 0)
                         fused_blocks[neighbor_idx] = JobSplit(pw, 1)
 
@@ -315,4 +356,11 @@ if __name__ == '__main__':
     # and apply it to every block
     remapped_blocks = [RemapBlock(fb, remap, idx) for idx, fb in fused_blocks.iteritems()]
 
+    # finally, extract the images and output labels
+    output_images = [CopyImage(i, idx) for idx, i in enumerate(images)]
+    output_labels = [ExtractLabelPlane(idx,
+                                       plane_join_lists[idx / block_z_size],
+                                       idx - (idx / block_z_size),  # offset within block
+                                       image_size, block_xy_size)
+                     for idx, _ in enumerate(images)]
     Job.run_all()
