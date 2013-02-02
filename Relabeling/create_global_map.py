@@ -10,7 +10,7 @@ if __name__ == '__main__':
     next_label = 1
 
     infile = h5py.File(sys.argv[1])
-    joins = infile['joins'][...]
+    joins = infile['merges'][...]
 
     # put every pair in the remap
     for v1, v2 in joins:
