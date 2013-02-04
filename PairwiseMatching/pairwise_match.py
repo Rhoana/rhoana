@@ -170,7 +170,8 @@ if merges.size > 0:
     out1.create_dataset('/merges', merges.shape, merges.dtype)[...] = merges
 
 if 'merges' in bl2f:
-    out2.create_dataset('/merges', merges.shape, merges.dtype)[...] = bl2f['merges']
+    merges = bl2f['merges']
+    out2.create_dataset('/merges', merges.shape, merges.dtype)[...] = merges
 
 
 if Debug:
