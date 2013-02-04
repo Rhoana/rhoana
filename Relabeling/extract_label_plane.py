@@ -21,4 +21,4 @@ if __name__ == '__main__':
         sz = data.shape[-1]
         output_image[ybase:ybase+sz, xbase:xbase+sz] = data
     tif = TIFF.open(output_path, mode='w')
-    tif.write_image(output_image)
+    tif.write_image(output_image, compression='lzw')
