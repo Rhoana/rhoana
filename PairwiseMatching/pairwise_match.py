@@ -73,6 +73,7 @@ block1_slice = tuple(slice(l, h) for l, h in zip(lo_block1, hi_block1))
 block2_slice = tuple(slice(l, h) for l, h in zip(lo_block2, hi_block2))
 packed_overlap1 = packed_block1[block1_slice]
 packed_overlap2 = packed_block2[block2_slice]
+print "block1", block1_slice, packed_overlap1.shape
 
 counter = fast64counter.ValueCountInt64()
 counter.add_values_pair32(packed_overlap1.astype(np.int32).ravel(), packed_overlap2.astype(np.int32).ravel())
