@@ -107,6 +107,8 @@ def build_model(areas, exclusions, links):
     model.objective.set_sense(model.objective.sense.maximize)
     model.parameters.threads.set(1) 
     model.parameters.mip.tolerances.mipgap.set(0.02)  # 2% tolerance
+    # model.parameters.emphasis.memory.set(1)  # doesn't seem to help
+    model.parameters.emphasis.mip.set(1)
 
     # model.write("theproblem.lp")
     return model, link_to_segs
@@ -229,7 +231,10 @@ if __name__ == '__main__':
     out_labels = lf.create_dataset('labels', [depth, width, height], dtype=np.uint64, chunks=tuple(chunking[1:]), compression='gzip')
     for D in range(depth):
         for Seg in range(numsegs):
-            assert (out_labels[D, :, :][...].astype(bool) * segment_map[labels[Seg, D, :, :]].astype(bool)).sum() == 0
+            if (out_labels[D, :, :][...].astype(bool) * segment_map[labels[Seg, D, :, :]].astype(bool)).sum() != 0:
+                badsegs = out_labels[D, :, :][...].astype(bool) * segment_map[labels[Seg, D, :, :]].astype(bool) != 0
+                print "BAD", out_labels[D, :, :][badsegs], segment_map[labels[Seg, D, :, :]][badsegs]
+            
             out_labels[D, :, :] |= segment_map[labels[Seg, D, :, :]]
 
     # move to final location

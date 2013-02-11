@@ -30,7 +30,7 @@ class Job(object):
         subprocess.check_call(["bsub",
                                "-Q", "all ~0",
                                "-r",
-                               "-R", "rusage[mem=10000]",
+                               "-R", "rusage[mem=16000]" if "FusedBlock" in self.name else "rusage[mem=10000]",
                                "-g", "/diced_connectome",
                                "-q", FUSED_QUEUE if "FusedBlock" in self.name else "short_serial" ,
                                "-J", self.name,
@@ -74,7 +74,7 @@ class Reassemble(Job):
         self.dataset = dataset
         self.dependencies = joblist
         self.output = output
-        self.already_done = True
+        self.already_done = False
 
     def command(self):
         return ['./reassemble.sh', self.dataset,
@@ -86,7 +86,7 @@ class Reassemble(Job):
 class Subimage_ProbabilityMap(Job):
     def __init__(self, raw_image, idx, xlo, ylo, xhi, yhi, xlo_core, ylo_core, xhi_core, yhi_core):
         Job.__init__(self)
-        self.already_done = True
+        self.already_done = False
         self.raw_image = raw_image
         self.dependencies = []
         self.coords = [str(c) for c in (xlo, ylo, xhi, yhi)]
@@ -101,7 +101,7 @@ class Subimage_ProbabilityMap(Job):
 class Subimage_SegmentedSlice(Job):
     def __init__(self, idx, probability_map, raw_image, xlo, ylo, xhi, yhi, xlo_core, ylo_core, xhi_core, yhi_core):
         Job.__init__(self)
-        self.already_done = True
+        self.already_done = False
         self.probability_map = probability_map
         self.raw_image = raw_image
         self.dependencies = [self.probability_map]
@@ -121,7 +121,7 @@ class Block(Job):
         self.segmented_slices = segmented_slices
         self.dependencies = segmented_slices
         self.args = [str(a) for a in args]
-        self.output = os.path.join('dicedblocks', 'block_%d_%d_%d.hdf5' % indices)
+        self.output = os.path.join('bigdicedblocks', 'block_%d_%d_%d.hdf5' % indices)
 
     def command(self):
         return ['./dice_block.sh'] + self.args + [s.output for s in self.dependencies] + [self.output]
@@ -129,12 +129,12 @@ class Block(Job):
 class FusedBlock(Job):
     def __init__(self, block, indices, global_block_number):
         Job.__init__(self)
-        self.already_done = True
+        self.already_done = False
         self.block = block
         self.global_block_number = global_block_number
         self.dependencies = [block]
         self.indices = indices
-        self.output = os.path.join('fusedblocks', 'fusedblock_%d_%d_%d.hdf5' % indices)
+        self.output = os.path.join('bigfusedblocks', 'fusedblock_%d_%d_%d.hdf5' % indices)
 
     def command(self):
         return ['./window_fusion.sh',
@@ -146,7 +146,7 @@ class PairwiseMatching(Job):
     def __init__(self, fusedblock1, fusedblock2, direction, even_or_odd, halo_width):
         Job.__init__(self)
         self.direction = direction
-        self.already_done = True
+        self.already_done = False
         self.even_or_odd = even_or_odd
         self.halo_width = halo_width
         self.indices = (fusedblock1.indices, fusedblock2.indices)
@@ -164,7 +164,7 @@ class JoinConcatenation(Job):
     def __init__(self, outfilename, inputs):
         Job.__init__(self)
         self.dependencies = inputs
-        self.already_done = True
+        self.already_done = False
         self.output = os.path.join('joins', outfilename)
 
     def command(self):
@@ -175,7 +175,7 @@ class JoinConcatenation(Job):
 class GlobalRemap(Job):
     def __init__(self, outfilename, joinjob):
         Job.__init__(self)
-        self.already_done = True
+        self.already_done = False
         self.dependencies = [joinjob]
         self.joinfile = joinjob.output
         self.output = os.path.join('joins', outfilename)
@@ -186,7 +186,7 @@ class GlobalRemap(Job):
 class RemapBlock(Job):
     def __init__(self, blockjob, build_remap_job, indices):
         Job.__init__(self)
-        self.already_done = True
+        self.already_done = False
         self.dependencies = [blockjob, build_remap_job]
         self.inputfile = blockjob.output
         self.mapfile = build_remap_job.output
@@ -199,7 +199,7 @@ class RemapBlock(Job):
 class CopyImage(Job):
     def __init__(self, input, idx):
         Job.__init__(self)
-        self.already_done = True
+        self.already_done = False
         self.dependencies = []
         self.inputfile = input
         self.idx = idx
@@ -211,7 +211,7 @@ class CopyImage(Job):
 class ExtractLabelPlane(Job):
     def __init__(self, zplane, remapped_blocks, zoffset, image_size, xy_block_size):
         Job.__init__(self)
-        self.already_done = zplane > 1
+        self.already_done = False
         self.dependencies = remapped_blocks
         self.zoffset = zoffset
         self.image_size = image_size
@@ -265,7 +265,7 @@ if __name__ == '__main__':
 
     block_xy_halo = 64
     block_xy_size = 512 - (2 * 64)
-    block_z_size = 20
+    block_z_size = 52
     block_z_halo = 6
 
     assert 'CONNECTOME' in os.environ
@@ -280,8 +280,6 @@ if __name__ == '__main__':
                                       (probability_subimage_size, probability_subimage_size),
                                       (probability_subimage_halo, probability_subimage_halo))
                                  for idx, f in enumerate(images)]
-
-    print subimage_probability_maps[0][0].command()
 
     # Reassemble full probability maps
     probability_maps = [Reassemble('improb', (image_size, image_size),
@@ -369,4 +367,12 @@ if __name__ == '__main__':
                                        idx - block_z_size * (idx / block_z_size),  # offset within block
                                        image_size, block_xy_size)
                      for idx, _ in enumerate(images)]
-    Job.run_all()
+    if len(sys.argv) == 2:
+        Job.run_all()
+    else:
+        for j in Job.all_jobs:
+            if j.output == sys.argv[2] or sys.argv[2] in j.output:
+                for k in j.dependencies:
+                    k.already_done = True
+                j.run()
+                
