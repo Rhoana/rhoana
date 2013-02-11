@@ -364,7 +364,7 @@ if __name__ == '__main__':
     max_zslab = max(remapped_blocks_by_plane.keys())
     output_labels = [ExtractLabelPlane(idx,
                                        remapped_blocks_by_plane[min(idx / block_z_size, max_zslab)],
-                                       idx - block_z_size * (idx / block_z_size),  # offset within block
+                                       idx - block_z_size * min(idx / block_z_size, max_zslab),  # offset within block
                                        image_size, block_xy_size)
                      for idx, _ in enumerate(images)]
     if len(sys.argv) == 2:
