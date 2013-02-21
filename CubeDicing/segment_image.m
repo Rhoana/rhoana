@@ -1,6 +1,8 @@
-function segment_image(image_file_path, probs_file_path, out_file_path)
+function segment_image(image_file_path, probs_file_path, out_file_path, xlo, ylo, xhi, yhi, core_xlo, core_ylo, core_xhi, core_yhi)
 % Usage:
 % segment_image image_file_in probability_file_in out_file_path
+
+disp('Entry');
 
 % Segments the input boundary probability image stored in an hdf5 file.
 % Outputs the resulting segmentations to out_file_path as an hdf5 file
@@ -21,6 +23,11 @@ input_image = imread(image_file_path);
 % Generate features and calculate membrane probabilities
 imProb = h5read(probs_file_path, '/improb');
 
+% Crop subregions
+fprintf(1, 'Coring %d,%d to %d,%d', xlo+1, ylo+1, xhi, yhi);
+input_image = input_image(xlo+1:xhi, ylo+1:yhi);
+imProb = imProb(xlo+1:xhi, ylo+1:yhi);
+
 % Segmentation settings (there are more settings in
 % generateMembraneProbabilities and gapCompletion)
 
@@ -29,107 +36,36 @@ imProb = h5read(probs_file_path, '/improb');
 %l_s_range = 0.6;
 %l_gc_range = 0.1;
 
-%Dual settings: use 30 threshold and 30 gap completion segmentations
+%Dual settings: use 20 threshold and 10 gap completion segmentations
 %(a linear combination of both might be even better)
 %Threshold
-threshRangeA = 0.21:0.01:0.5;
+threshRangeA = 0.21:0.015:0.5;
 l_s_rangeA = 0.6;
 l_gc_rangeA = 0.1;
 
 %Gap completion
 threshRangeB = 0.5;
 l_s_rangeB = 0.2;
-l_gc_rangeB = 0.05:0.05:1.5;
+l_gc_rangeB = 0.05:0.05:0.5;
 
 %maxSegi = length(threshRange) * length(l_s_range) * length(l_gc_range);
 maxSegi = length(threshRangeA) * length(l_s_rangeA) * length(l_gc_rangeA) + ...
     length(threshRangeB) * length(l_s_rangeB) * length(l_gc_rangeB);
 
-%maxchunksizeXY = 512;
-%halo = 128;
-maxchunksizeXY = 1024;
-halo = 256;
 
-%Allocate space for segmentations
-imsize = size(input_image);
-segs = zeros(imsize(1), imsize(2), maxSegi, 'uint8');
+% Run segmentation
 
-xdiv = 1;
-ydiv = 1;
+%Single mode
+%segs = gapCompletion(chunk, chunk_prob, threshRange, l_s_range, l_gc_range);
 
-while floor(imsize(1) / xdiv) > maxchunksizeXY
-    xdiv = xdiv + 1;
-end
-
-while floor(imsize(2) / ydiv) > maxchunksizeXY
-    ydiv = ydiv + 1;
-end
-
-fprintf(1, 'Segmenting image in %dx%d chunks with %d overlap.\n', xdiv, ydiv, halo);
+%Dual mode
+segs = cat(3, ...
+           gapCompletion(input_image, imProb, threshRangeA, l_s_rangeA, l_gc_rangeA), ...
+           gapCompletion(input_image, imProb, threshRangeB, l_s_rangeB, l_gc_rangeB));
 
 
-for xi = 1:xdiv
-    for yi = 1:ydiv
-        minX = floor(imsize(1) / xdiv * (xi-1)) + 1;
-        maxX = floor(imsize(1) / xdiv * xi);
-        minY = floor(imsize(2) / ydiv * (yi-1)) + 1;
-        maxY = floor(imsize(2) / ydiv * yi);
-        
-        fprintf(1, 'Segmenting region %d-%dx%d-%d.\n', minX, maxX, minY, maxY);
-        
-        if minX - halo <= 0
-            haloMinX = 1;
-            fromMinX = minX;
-        else
-            haloMinX = minX - halo;
-            fromMinX = halo + 1;
-        end
-        
-        if maxX + halo > imsize(1)
-            haloMaxX = imsize(1);
-            fromMaxX = maxX - haloMinX + 1;
-        else
-            haloMaxX = maxX + halo;
-            fromMaxX = maxX - haloMinX + 1;
-        end
-        
-        if minY - halo <= 0
-            haloMinY = 1;
-            fromMinY = minY;
-        else
-            haloMinY = minY - halo;
-            fromMinY = halo + 1;
-        end
-        
-        if maxY + halo > imsize(2)
-            haloMaxY = imsize(2);
-            fromMaxY = maxY - haloMinY + 1;
-        else
-            haloMaxY = maxY + halo;
-            fromMaxY = maxY - haloMinY + 1;
-        end
-        
-        fprintf(1, 'Halo region %d-%dx%d-%d.\n', haloMinX, haloMaxX, haloMinY, haloMaxY);
-        
-        chunk = input_image(haloMinX:haloMaxX, haloMinY:haloMaxY);
-        
-        %Run Segmentation on this chunk
-        chunk_prob = imProb(haloMinX:haloMaxX, haloMinY:haloMaxY);
-                
-        %Single mode
-        %segs = gapCompletion(chunk, chunk_prob, threshRange, l_s_range, l_gc_range);
-        
-        %Dual mode
-        chunk_segs = cat(3, ...
-            gapCompletion(chunk, chunk_prob, threshRangeA, l_s_rangeA, l_gc_rangeA), ...
-            gapCompletion(chunk, chunk_prob, threshRangeB, l_s_rangeB, l_gc_rangeB));
-        
-        %Assign to the correct region
-        segs(minX:maxX, minY:maxY, :) = uint8(chunk_segs(fromMinX:fromMaxX, fromMinY:fromMaxY, :));
-        
-    end
-end
-
+% Extract the core
+segs = segs(core_xlo+1-xlo:core_xhi-xlo, core_ylo+1-ylo:core_yhi-ylo, :);
 
 %Convert
 segs = uint8(segs) * 255;
@@ -142,8 +78,10 @@ if exist(temp_file_path, 'file'),
   delete(temp_file_path);
 end
 h5create(temp_file_path, '/segs', [Inf, Inf, Inf], 'DataType', 'uint8', 'ChunkSize', [64,64,10], 'Deflate', 9);
+h5create(temp_file_path, '/original_coords', 6, 'DataType', 'uint32');
 
-h5write(temp_file_path, '/segs', segs, [1, 1, 1], size(segs));
+h5write(temp_file_path, '/segs', segs, [1, 1, 1], size(segs))
+h5write(temp_file_path, '/original_coords', [core_xlo, core_ylo, 0, core_xhi, core_yhi, size(segs, 3)]);
 
 movefile(temp_file_path, out_file_path);
 fprintf(1, 'segment_image successfuly wrote to file: %s.\n', out_file_path);

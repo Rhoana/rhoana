@@ -53,6 +53,8 @@ overlap_counts = sparse(packed1, packed2, ones(size(packed1)));
 
 % Find total areas of each label within overlap region
 sz = size(overlap_counts);
+sz
+szb = size(sum(overlap_counts, 2))
 packed1_total_areas = repmat(sum(overlap_counts, 2), 1, sz(2));
 packed2_total_areas = repmat(sum(overlap_counts, 1), sz(1), 1);
 
@@ -73,7 +75,7 @@ for ix = 1:length(r),
     label1 = packed1_to_orig(r(ix));
     label2 = packed2_to_orig(c(ix));
     if (label1 ~= 0) & (label2 ~= 0),
-       to_join = [to_join; [label1, label2]]
+      to_join = [to_join; [label1, label2]];
     end
 end
 
@@ -135,3 +137,6 @@ h5write(temp2, '/labels', block2_overlap, lo_block2, hi_block2 - lo_block2 + 1);
 % move temporaries into place
 movefile(temp1, outblock1);
 movefile(temp2, outblock2);
+
+display('Success');
+

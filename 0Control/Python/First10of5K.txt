@@ -1,0 +1,10 @@
+/n/scratch2/pfister_lab/thouis_jones/big_dataset/Connectome/Pipeline/0Control/Python/../../../../../../../amelio/data/conn/main_dataset/5K_cube/input_images/z=000001.tiff
+/n/scratch2/pfister_lab/thouis_jones/big_dataset/Connectome/Pipeline/0Control/Python/../../../../../../../amelio/data/conn/main_dataset/5K_cube/input_images/z=000002.tiff
+/n/scratch2/pfister_lab/thouis_jones/big_dataset/Connectome/Pipeline/0Control/Python/../../../../../../../amelio/data/conn/main_dataset/5K_cube/input_images/z=000003.tiff
+/n/scratch2/pfister_lab/thouis_jones/big_dataset/Connectome/Pipeline/0Control/Python/../../../../../../../amelio/data/conn/main_dataset/5K_cube/input_images/z=000004.tiff
+/n/scratch2/pfister_lab/thouis_jones/big_dataset/Connectome/Pipeline/0Control/Python/../../../../../../../amelio/data/conn/main_dataset/5K_cube/input_images/z=000005.tiff
+/n/scratch2/pfister_lab/thouis_jones/big_dataset/Connectome/Pipeline/0Control/Python/../../../../../../../amelio/data/conn/main_dataset/5K_cube/input_images/z=000006.tiff
+/n/scratch2/pfister_lab/thouis_jones/big_dataset/Connectome/Pipeline/0Control/Python/../../../../../../../amelio/data/conn/main_dataset/5K_cube/input_images/z=000007.tiff
+/n/scratch2/pfister_lab/thouis_jones/big_dataset/Connectome/Pipeline/0Control/Python/../../../../../../../amelio/data/conn/main_dataset/5K_cube/input_images/z=000008.tiff
+/n/scratch2/pfister_lab/thouis_jones/big_dataset/Connectome/Pipeline/0Control/Python/../../../../../../../amelio/data/conn/main_dataset/5K_cube/input_images/z=000009.tiff
+/n/scratch2/pfister_lab/thouis_jones/big_dataset/Connectome/Pipeline/0Control/Python/../../../../../../../amelio/data/conn/main_dataset/5K_cube/input_images/z=000010.tiff
