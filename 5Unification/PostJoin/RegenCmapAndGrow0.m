@@ -1,6 +1,14 @@
-labels_dir = 'C:\dev\datasets\conn\main_dataset\5K_cube\diced_xy=512_z=32_xyOv=128_zOv=12_dwnSmp=1\res_from_0ct15_PF\FS=1\stitched\labels\';
-grow_dir = 'C:\dev\datasets\conn\main_dataset\5K_cube\diced_xy=512_z=32_xyOv=128_zOv=12_dwnSmp=1\res_from_0ct15_PF\FS=1\stitched\labels_grow\';
-cmap_filename = 'C:\dev\datasets\conn\main_dataset\5K_cube\diced_xy=512_z=32_xyOv=128_zOv=12_dwnSmp=1\res_from_0ct15_PF\FS=1\cmap.mat';
+%labels_dir = 'C:\dev\datasets\conn\main_dataset\5K_cube\diced_xy=512_z=32_xyOv=128_zOv=12_dwnSmp=1\res_from_0ct15_PF\FS=1\stitched\labels\';
+%grow_dir = 'C:\dev\datasets\conn\main_dataset\5K_cube\diced_xy=512_z=32_xyOv=128_zOv=12_dwnSmp=1\res_from_0ct15_PF\FS=1\stitched\labels_grow\';
+%cmap_filename = 'C:\dev\datasets\conn\main_dataset\5K_cube\diced_xy=512_z=32_xyOv=128_zOv=12_dwnSmp=1\res_from_0ct15_PF\FS=1\cmap.mat';
+% labels_dir = 'C:\dev\datasets\conn\main_dataset\cube2\diced_xy=512_z=32_xyOv=128_zOv=12_dwnSmp=1\res_from_Nov29_PF\FS=1\stitched\labels\';
+% grow_dir = 'C:\dev\datasets\conn\main_dataset\cube2\diced_xy=512_z=32_xyOv=128_zOv=12_dwnSmp=1\res_from_Nov29_PF\FS=1\stitched\labels_grow\';
+% cmap_filename = 'C:\dev\datasets\conn\main_dataset\cube2\diced_xy=512_z=32_xyOv=128_zOv=12_dwnSmp=1\res_from_Nov29_PF\FS=1\cmap2.mat';
+
+labels_dir = 'C:\dev\datasets\conn\main_dataset\ac3train\diced_xy=512_z=32_xyOv=128_zOv=12_dwnSmp=1\res_from_Dec19_0975_60_PF\FS=1\stitched\labels\';
+grow_dir = 'C:\dev\datasets\conn\main_dataset\ac3train\diced_xy=512_z=32_xyOv=128_zOv=12_dwnSmp=1\res_from_Dec19_0975_60_PF\FS=1\stitched\labels_grow\';
+cmap_filename = 'C:\dev\datasets\conn\main_dataset\ac3train\diced_xy=512_z=32_xyOv=128_zOv=12_dwnSmp=1\res_from_Dec19_0975_60_PF\FS=1\cmap2.mat';
+
 
 fprintf(1, 'Loading segmentation.\n');
 seg_files = [ dir(fullfile(labels_dir, '*.tif')); ...
@@ -47,6 +55,7 @@ for zi = 1:length(seg_files)
     color_labels(:,:,1) = uint8(bitand(labels, uint32(2^8-1)));
     color_labels(:,:,2) = uint8(bitand(bitshift(labels, -8), uint32(2^8-1)));
     color_labels(:,:,3) = uint8(bitand(bitshift(labels, -16), uint32(2^8-1)));
+    
     imwrite(color_labels, fullfile(grow_dir, seg_files{zi}));
     
 end

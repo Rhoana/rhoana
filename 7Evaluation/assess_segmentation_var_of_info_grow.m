@@ -33,6 +33,7 @@ seg_prefix = 'C:\dev\datasets\conn\main_dataset\ac3train\diced_xy=512_z=32_xyOv=
 
 %Test (512)
 %result_list = {'res_from_0ct02_PF'};
+%result_list = {'res_from_Dec19_0975_60_PF'};
 
 %Small dicing (256)
 %result_list = {'res_from_SmallDice_PF'};
@@ -50,7 +51,9 @@ seg_prefix = 'C:\dev\datasets\conn\main_dataset\ac3train\diced_xy=512_z=32_xyOv=
 %result_list = {'res_from_ODY_sept_27_PF'};
 %result_list = {'res_from_sept_30_minotrC_PF'}; % This is the best result (so far) for training data
 
-result_list = {'res_from_Dec19_0925_60_PF'};
+result_list = {'res_from_Dec19_0975_60_PF'};
+%result_list = {'res_from_Dec19_095_60_PF'};
+%result_list = {'res_from_Dec19_0925_60_PF'};
 %result_list = {'res_from_Dec19_09_60_PF'};
 
 % result_list = {'res_from_sept_14_scf095_mop0_PF', ...
