@@ -15,7 +15,7 @@ function i_output = thin_and_recolor_image(i_input)
    i_tess(1:end,end) = 1;   i_tess(end,1:end) = 1;      
 
    i_input_bdries_thin = i_tess;
-   i_retess = labelmatrix(bwconncomp(~i_input_bdries_thin, 4));
+   i_retess = uint32(labelmatrix(bwconncomp(~i_input_bdries_thin, 4)));
 
    label_grouping     = accumarray(i_retess(:)+1, i_input(:)+1, [], @(x) {x});   
    mapping_of_retess_labels_left  = cellfun(@(x) faster_unique(x(:)), label_grouping,           'UniformOutput', false);

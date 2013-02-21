@@ -3,6 +3,7 @@ function window_fusion( input_seg_hdf5, global_block_idx, output_hdf5 )
 %Add the lib folder to the path
 d = fileparts(which(mfilename));
 addpath(genpath(fullfile(d, '..', 'lib', 'fusion')));
+addpath(genpath('C:\Program Files\IBM\ILOG\CPLEX_Studio124\cplex\matlab\x64_win64'));
 
 %input_seg_hdf5 = 'ExampleDicedBlock.hdf5';
 %output_mat = 'ExampleFusionOutput.mat';

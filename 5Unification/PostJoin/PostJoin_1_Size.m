@@ -7,7 +7,8 @@ src_dir = fullfile(dataset_dir, subvol_name);
 %src_dir = 'C:\dev\datasets\conn\main_dataset\ac3train\';
 dice_string = 'diced_xy=512_z=32_xyOv=128_zOv=12_dwnSmp=1';
 %dice_string = 'diced_xy=256_z=16_xyOv=128_zOv=8_dwnSmp=1';
-result_name = 'res_from_0ct02_PF';
+%result_name = 'res_from_0ct02_PF';
+result_name = 'res_from_J1_scf08_PF';
 %result_name = 'res_from_sept_14_seg60_scf0925_PF';
 %result_name = 'res_from_sept_14_seg60_scf095_PF';
 %result_name = 'res_from_sept_14_seg60_scf0975_PF';
@@ -122,7 +123,7 @@ segsizes_i = [seg_stats.Area];
 %Now join up segments
 fprintf(1, 'Joining segments.\n');
 validsegs = segsizes_i > 0;
-for minsegsize = [1000 2500 5000 10000 15000 20000 25000];
+for minsegsize = [500 1000 2500 5000 10000 15000 20000 25000];
     %segoi = 1;
     fprintf(1,'Joining segments up to size %d.\n', minsegsize);
     %Blank out anything unconnected
