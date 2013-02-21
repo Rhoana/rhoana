@@ -1,0 +1,5 @@
+*~
+*.o
+*.hdf5
+compute_features
+.gitignore
