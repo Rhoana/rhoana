@@ -1,6 +1,6 @@
 OPENCV=/Users/thouis/opencv-install
 HDF5_DIR=/Users/thouis/homebrew/Cellar/hdf5/1
-CXXFLAGS=-I$(OPENCV)/include -I$(HDF5_DIR)/include -g
+CXXFLAGS=-I$(OPENCV)/include -I$(HDF5_DIR)/include -g -O3
 LDFLAGS=-L$(OPENCV)/lib -lopencv_highgui -lopencv_imgproc -lopencv_core -L$(HDF5_DIR)/lib -lhdf5_cpp -lhdf5
 
 all: compute_features show_features test_image_to_hdf5 train_randomforest predict_randomforest train_gb predict_gb
