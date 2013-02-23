@@ -93,7 +93,8 @@ void read_feature(H5File h5f, Mat &image_out, const char *name, const Rect &roi=
     DataSpace imspace;
     float *imdata;
     if (image_out.isContinuous()) {
-        imspace = dataset.getSpace(); // same size as 
+        dims[0] = image_out.size().height; dims[1] = image_out.size().width;
+        imspace = DataSpace(2, dims);
         imspace.selectAll();
         imdata = image_out.ptr<float>();
     } else {
