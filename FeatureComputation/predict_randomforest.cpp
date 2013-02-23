@@ -29,7 +29,7 @@ vector<string> feature_names(H5File h5f)
 
 int main(int argc, char** argv)
 {
-    cv::FileStorage fs("forest.xml",cv::FileStorage::READ);
+    cv::FileStorage fs(argv[1], cv::FileStorage::READ);
     CvRTrees forest;
     forest.read(*fs, *fs["forest"]);
 
