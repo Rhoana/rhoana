@@ -60,6 +60,7 @@ int main(int argc, char** argv)
             roi &= fullrect;
 
             vector<Mat> features(num_features);
+            vector<int> counts(num_features);
             // Read features
             for (int fnum = 0; fnum < num_features; fnum++) {
                 read_feature(h5f, features[fnum], names[fnum].c_str(), roi);
@@ -79,6 +80,7 @@ int main(int argc, char** argv)
                 const CvDTreeNode *root = bt->get_root();
                 CvDTreeSplit* split = root->split;
                 int fnum = split->var_idx;
+                counts[fnum]++;
                 float thresh = split->ord.c;
                 float left_val = root->left->value;
                 float right_val = root->right->value;
@@ -97,6 +99,8 @@ int main(int argc, char** argv)
                 for (int i = 0; i < roi_size; i++, feature_ptr++, score_ptr++)
                     *score_ptr += ((*feature_ptr <= thresh) ? left_val : right_val);
             }
+            for (int fnum = 0; fnum < num_features; fnum++)
+                cout << names[fnum] << " " << counts[fnum] << endl;
             // convert to probability
             float *score_ptr = GB_sum.ptr<float>(0);
             for (int i = 0; i < roi_size; i++, score_ptr++)

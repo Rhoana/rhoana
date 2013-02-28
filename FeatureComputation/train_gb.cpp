@@ -3,6 +3,7 @@
 #include <opencv/ml.h>
 #include <H5Cpp.h>
 #include <assert.h>
+#include <fstream>
 using namespace cv;
 using namespace H5;
 using namespace std;
@@ -30,7 +31,9 @@ int main(int argc, char** argv)
     int base = 0;
     int total_num_negative = 0, total_num_positive = 0;
 
-    for (int i = 1; i < argc; i += 2) {
+    vector<string> names = feature_names(open_feature_file(argv[2]));
+
+    for (int i = 1; i < argc - 1; i += 2) {
         // Load the labeled image
         Mat image = imread(argv[i], 1);
         image.convertTo(image, CV_8U);
@@ -51,7 +54,7 @@ int main(int argc, char** argv)
 
         // Fetch features
         H5File h5f = open_feature_file(argv[i + 1]);
-        vector<string> names = feature_names(h5f);
+        assert(feature_names(h5f) == names);
 
         // allocate new rows in training data
         if (base == 0) {
@@ -111,6 +114,29 @@ int main(int argc, char** argv)
     classifier.train(data, CV_ROW_SAMPLE, labels,
                      Mat(), Mat(), var_type, Mat(), parms);
 
-    cv::FileStorage fs("GB.xml",cv::FileStorage::WRITE);
-    classifier.write(*fs, "classifier");
+
+    // Write out the classifier in a format that we can easily transform into C code.
+    ofstream classifier_out(argv[argc - 1]);
+
+    CvSeq* weak_classifiers = classifier.get_weak_predictors();
+    CvSeqReader reader;
+    cvStartReadSeq(weak_classifiers, &reader);
+    cvSetSeqReaderPos( &reader, 0);
+
+    for (int wi = 0; wi < weak_classifiers->total; wi++) {
+        CvBoostTree* bt;
+        CV_READ_SEQ_ELEM( bt, reader );
+        const CvDTreeNode *root = bt->get_root();
+        CvDTreeSplit* split = root->split;
+        int fnum = split->var_idx;
+        float thresh = split->ord.c;
+        float left_val = root->left->value;
+        float right_val = root->right->value;
+        if (split->inversed) {
+            float temp = left_val;
+            left_val = right_val;
+            right_val = temp;
+        }
+        classifier_out << names[fnum] << " <= " << thresh << " ? " << left_val << " : " << right_val << endl;
+    }
 }

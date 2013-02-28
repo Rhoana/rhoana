@@ -3,11 +3,11 @@ HDF5_DIR=/Users/thouis/homebrew/Cellar/hdf5/1
 CXXFLAGS=-I$(OPENCV)/include -I$(HDF5_DIR)/include -g -O3
 LDFLAGS=-L$(OPENCV)/lib -lopencv_highgui -lopencv_imgproc -lopencv_core -L$(HDF5_DIR)/lib -lhdf5_cpp -lhdf5
 
-all: compute_features show_features test_image_to_hdf5 train_randomforest predict_randomforest train_gb predict_gb
+all: compute_features show_features test_image_to_hdf5 train_randomforest predict_randomforest train_gb predict_gb classify_image
 
-membrane.o: quickmedian.h
+membranes.o: quickmedian.h
 
-compute_features: opencv_hdf5.o compute_features.o membrane.o adapthisteq.o local_statistics.o tensor_gradient_features.o drawhist.o vesicles.o
+compute_features: opencv_hdf5.o compute_features.o membranes.o adapthisteq.o local_statistics.o tensor_gradient.o drawhist.o vesicles.o
 	g++ -o $@ $^ $(LDFLAGS)
 
 show_features: opencv_hdf5.o show_features.o
@@ -31,3 +31,7 @@ test_image_to_hdf5: opencv_hdf5.o test_image_to_hdf5.o
 
 sketch_on_image: sketch_on_image.o
 	g++ -o $@ $^ $(LDFLAGS)
+
+classify_image: opencv_hdf5.o classify_image.o membranes.o adapthisteq.o local_statistics.o tensor_gradient.o drawhist.o vesicles.o
+	g++ -o $@ $^ $(LDFLAGS)
+
