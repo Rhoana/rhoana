@@ -12,11 +12,17 @@ H5::H5File create_feature_file(char *filename, const Mat &image);
 void write_feature(H5::H5File h5file, const Mat &image, const char *name);
 
 void adapthisteq(const Mat &in, Mat &out, float regularizer);
-void find_membranes(Mat &image_in, int windowsize, int membranewidth, H5::H5File &h5f);
-void local_statistics(Mat &image_in, int windowsize, H5::H5File &h5f);
-void tensor_gradient_features(Mat &image_in, H5::H5File &h5f);
-void drawhist(const Mat &src, const char *windowname);
-void vesicles(const Mat &image_in, H5::H5File &h5f);
+void membranes(Mat &image_in, int windowsize, int membranewidth, void (*feature_callback)(const Mat &image, const char *name));
+void local_statistics(Mat &image_in, int windowsize, void (*feature_callback)(const Mat &image, const char *name));
+void tensor_gradient(Mat &image_in, void (*feature_callback)(const Mat &image, const char *name));
+void vesicles(const Mat &image_in, void (*feature_callback)(const Mat &image, const char *name));
+
+static H5::H5File h5f;
+// callback for feature writing
+void add_feature(const Mat &image, const char *name)
+{
+    write_feature(h5f, image, name);
+}
 
 static int verbose;
 
@@ -81,28 +87,28 @@ int main(int argc, char** argv) {
   image.convertTo(image, CV_8U);
   
   /* create the feature file */
-  H5::H5File h5f = create_feature_file(output_hdf5, image);
+  h5f = create_feature_file(output_hdf5, image);
 
   /* compute and write features */
   
   /* FEATURE: Original image */
-  write_feature(h5f, image, "original");
+  add_feature(image, "original");
 
   /* FEATURE: normxcorr with small circles */
-  vesicles(image, h5f);
+  vesicles(image, add_feature);
 
   /* normalize image */
   adapthisteq(image, image, 2);  // max CDF derivative of 2
 
   /* FEATURE: Normalized image */
-  write_feature(h5f, image, "adapthisteq");
+  add_feature(image, "adapthisteq");
 
   /* FEATURE: normalized cross-correlation with membrane template, with statistics */
-  find_membranes(image, windowsize, membranewidth, h5f);
+  membranes(image, windowsize, membranewidth, add_feature);
 
   /* FEATURE: local statistics: mean, variance, and pixel counts per-decile */
-  local_statistics(image, windowsize, h5f);
+  local_statistics(image, windowsize, add_feature);
 
   /* FEATURE: successively smoothed versions of (image, anisotropy, gradient magnitude) */
-  tensor_gradient_features(image, h5f);
+  tensor_gradient(image, add_feature);
 }
