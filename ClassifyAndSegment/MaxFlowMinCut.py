@@ -1,6 +1,7 @@
 import numpy as np
 import scipy
 import scipy.io
+import scipy.ndimage
 import mahotas
 import math
 import h5py
@@ -12,8 +13,8 @@ import pymaxflow
 
 #plt.ion()
 
-input_image_file = 'C:\\dev\\datasets\\conn\\main_dataset\\ac3train\\input_images\\I00000_image.tif'
-input_prob_file = 'C:\\dev\\datasets\\conn\\main_dataset\\ac3train\\forest_prob_adj\\I00000_image.mat'
+input_image_file = 'C:\\dev\\datasets\\conn\\main_dataset\\ac3train\\input_images\\I00005_image.tif'
+input_prob_file = 'C:\\dev\\datasets\\conn\\main_dataset\\ac3train\\forest_prob_adj\\I00005_image.mat'
 input_orientation_file = 'C:\\dev\\datasets\\conn\\main_dataset\\ac3train\\example_prediction.hdf5'
 
 n_orientations = 8
@@ -54,14 +55,14 @@ for round_oi in range(4):
 ### Threshold and Gap Completion settings - loop over these values
 
 ##Threshold
-probability_thresholds = list(np.arange(0.21, 0.51, 0.01))
-smoothing_factors = [0.6]
-gap_completion_factors = [0.05]
+#probability_thresholds = list(np.arange(0.21, 0.51, 0.01))
+#smoothing_factors = [0.6]
+#gap_completion_factors = [0.05]
 
 ##Gap completion
-#probability_thresholds = [0.5]
-#smoothing_factors = [0.2]
-#gap_completion_factors = list(np.arange(0.01, 0.31, 0.01))
+probability_thresholds = [0.5]
+smoothing_factors = [0.2]
+gap_completion_factors = list(np.arange(0.008, 0.24, 0.008))
 
 ##Single cut example
 #probability_thresholds = [0.3]
@@ -78,9 +79,17 @@ image_sigma = 1
 prob_sigma = 1.1
 
 ## Tidy up settings
-rad = 2;
-y,x = np.ogrid[-rad:rad+1, -rad:rad+1]
-disc = x*x + y*y <= rad*rad
+blur_radius = 2;
+y,x = np.ogrid[-blur_radius:blur_radius+1, -blur_radius:blur_radius+1]
+disc = x*x + y*y <= blur_radius*blur_radius
+blur_sigma = 3
+
+extra_cellular_dist = 10
+y,x = np.ogrid[-extra_cellular_dist:extra_cellular_dist+1, -extra_cellular_dist:extra_cellular_dist+1]
+min_disc = x*x + y*y <= extra_cellular_dist*extra_cellular_dist
+
+blur_prob_scale = 2**31
+blur_prob = (scipy.ndimage.gaussian_filter(prob_image, blur_sigma) * blur_prob_scale).astype(np.int32)
 
 ## Calculate the graph cut connectivity matrices
 
@@ -202,8 +211,13 @@ for probability_threshold in probability_thresholds:
 
             labels = labels.reshape(norm_image.shape)
 
+            ## Remove small segments
             labels = mahotas.morph.close(labels.astype(np.bool), disc)
             labels = mahotas.morph.open(labels.astype(np.bool), disc)
+
+            #plt.figure(figsize=(15,15))
+            #plt.imshow(labels, cmap=cm.gray)
+            #plt.draw()
 
             skeleton = mahotas.thin(labels==0)
             biglabels, nlabels = mahotas.label(skeleton==0)
@@ -215,7 +229,45 @@ for probability_threshold in probability_thresholds:
             #plt.figure(figsize=(15,15))
             #plt.imshow(boundary, cmap=cm.gray)
             #plt.draw()
-            #time.sleep(1)
 
-            segmentations[:,:,segmentation_count] = boundary
+            ## Use blurred probabilities and watershed instead of region growing
+            seeds,_ = mahotas.label(labels==1)
+
+            ws = mahotas.cwatershed(blur_prob, seeds)
+            dx, dy = np.gradient(ws)
+            ws_boundary = np.logical_or(dx!=0, dy!=0)
+
+            #plt.figure(figsize=(15,15))
+            #plt.imshow(ws_boundary, cmap=cm.gray)
+            #plt.draw()
+
+            ## Identify possible extra-cellular space - distance method
+            #extra_cellular = np.logical_and(mahotas.distance(labels==0) > 100, seeds == np.min(seeds))
+            #extra_cellular = mahotas.morph.close(extra_cellular.astype(np.bool), disc)
+            #extra_cellular = mahotas.morph.open(extra_cellular.astype(np.bool), disc)
+            #extra_cellular_indices = np.nonzero(extra_cellular)
+
+            ## Identify possible extra-cellular space - minima method
+            extra_cellular = np.logical_and(mahotas.regmin(blur_prob, min_disc), seeds == np.min(seeds))
+            extra_cellular_indices = np.nonzero(extra_cellular)
+
+            extra_cellular_id = np.max(seeds)+1
+            seeds[extra_cellular_indices] = extra_cellular_id
+
+            #plt.figure(figsize=(15,15))
+            #plt.imshow(seeds, cmap=cm.gray)
+            #plt.draw()
+
+            ws = mahotas.cwatershed(blur_prob, seeds)
+            dx, dy = np.gradient(ws)
+            ws_boundary = np.logical_or(dx!=0, dy!=0)
+
+            ## Optional - mark the extra-cellular space as boundary
+            #ws_boundary[np.nonzero(ws == extra_cellular_id)] = 1
+
+            plt.figure(figsize=(15,15))
+            plt.imshow(ws_boundary, cmap=cm.gray)
+            plt.draw()
+
+            segmentations[:,:,segmentation_count] = ws_boundary
             segmentation_count = segmentation_count + 1
