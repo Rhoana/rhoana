@@ -1,12 +1,9 @@
 #include <stdlib.h>
 #include <opencv/cv.h>
 #include <opencv/highgui.h>
-#include <H5Cpp.h>
 
 using namespace cv;
 using namespace std;
-
-void write_feature(H5::H5File h5file, const Mat &image, const char *name);
 
 #define NUM_SMOOTHINGS 10
 
@@ -24,7 +21,7 @@ string dog_name(int sigma1, int sigma2)
     return string(s.str());
 }
 
-void tensor_gradient_features(Mat &image_in,  H5::H5File &h5f)
+void tensor_gradient(Mat &image_in, void (*feature_callback)(const Mat &image, const char *name))
 {
     Mat image;
     image_in.convertTo(image, CV_32F);
@@ -58,19 +55,19 @@ void tensor_gradient_features(Mat &image_in,  H5::H5File &h5f)
     Mat smoothed_mag;
     for (int i = 0; i < NUM_SMOOTHINGS; i++) {
         GaussianBlur(image, smoothed_ims[i], Size(0, 0), i + 1);
-        write_feature(h5f, smoothed_ims[i], smoothed_name(i + 1, "image").c_str());
+        feature_callback(smoothed_ims[i], smoothed_name(i + 1, "image").c_str());
         GaussianBlur(anisotropy, smoothed_aniso, Size(0, 0), i + 1);
-        write_feature(h5f, smoothed_aniso, smoothed_name(i + 1, "anisotropy").c_str());
+        feature_callback(smoothed_aniso, smoothed_name(i + 1, "anisotropy").c_str());
         GaussianBlur(magnitude, smoothed_mag, Size(0, 0), i + 1);
-        write_feature(h5f, smoothed_mag, smoothed_name(i + 1, "magnitude").c_str());
+        feature_callback(smoothed_mag, smoothed_name(i + 1, "magnitude").c_str());
         for (int j = 0; j < i - 1; j+= 2) {
             Mat DoG = smoothed_ims[i] - smoothed_ims[j];
-            write_feature(h5f, DoG, dog_name(i + 1, j + 1).c_str());
+            feature_callback(DoG, dog_name(i + 1, j + 1).c_str());
         }
     }
 
-    // Large DoG
+    // Large DoG (woof!)
     Mat g50;
     GaussianBlur(image, g50, Size(0, 0), 50);
-    write_feature(h5f, smoothed_ims[1] - g50, "DoG_2_50");
+    feature_callback(smoothed_ims[1] - g50, "DoG_2_50");
 }

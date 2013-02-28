@@ -1,14 +1,11 @@
 #include <stdlib.h>
 #include <opencv/cv.h>
 #include <opencv/highgui.h>
-#include <H5Cpp.h>
 
 #include "quickmedian.h"
 
 using namespace cv;
 using namespace std;
-
-void write_feature(H5::H5File h5file, const Mat &image, const char *name);
 
 #define MIN_RADIUS 2
 #define MAX_RADIUS 6
@@ -20,7 +17,7 @@ string vesicle_feature_name(int radius)
     return string(s.str());
 }
 
-void vesicles(const Mat &image_in, H5::H5File &h5f)
+void vesicles(const Mat &image_in, void (*feature_callback)(const Mat &image, const char *name))
 {
     Mat maxv = Mat::zeros(image_in.size(), CV_32F);
     Mat minv = Mat::ones(image_in.size(), CV_32F);
@@ -39,15 +36,15 @@ void vesicles(const Mat &image_in, H5::H5File &h5f)
 
         Mat match;
         matchTemplate(image, tmplate, match, CV_TM_CCORR_NORMED);
-        write_feature(h5f, match, vesicle_feature_name(r).c_str());
+        feature_callback(match, vesicle_feature_name(r).c_str());
         maxv = max(maxv, match);
         minv = min(minv, match);
     }
-    write_feature(h5f, maxv, "vesicle_max");
-    write_feature(h5f, minv, "vesicle_min");
+    feature_callback(maxv, "vesicle_max");
+    feature_callback(minv, "vesicle_min");
     GaussianBlur(maxv, maxv, Size(0, 0), 2);
     GaussianBlur(minv, minv, Size(0, 0), 2);
-    write_feature(h5f, maxv, "vesicle_blurmax");
-    write_feature(h5f, minv, "vesicle_blurmin");
+    feature_callback(maxv, "vesicle_blurmax");
+    feature_callback(minv, "vesicle_blurmin");
 }
 

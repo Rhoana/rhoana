@@ -1,14 +1,11 @@
 #include <stdlib.h>
 #include <opencv/cv.h>
 #include <opencv/highgui.h>
-#include <H5Cpp.h>
 
 #include "quickmedian.h"
 
 using namespace cv;
 using namespace std;
-
-void write_feature(H5::H5File h5file, const Mat &image, const char *name);
 
 #define NUM_ROTATIONS 8
 
@@ -19,7 +16,7 @@ string membrane_feature_name(int windowsize, int membranewidth, int angle)
     return string(s.str());
 }
 
-void find_membranes(Mat &image_in, int windowsize, int membranewidth, H5::H5File &h5f)
+void membranes(Mat &image_in, int windowsize, int membranewidth, void (*feature_callback)(const Mat &image, const char *name))
 {
   Mat tmplate = Mat::zeros(windowsize, windowsize, CV_8U);
   
@@ -47,30 +44,30 @@ void find_membranes(Mat &image_in, int windowsize, int membranewidth, H5::H5File
       warpAffine(tmplate, rot_tmplate, rot_mat, tmplate.size());
       matchTemplate(image, rot_tmplate, match, CV_TM_CCORR_NORMED);
       match.reshape(0, match.total()).copyTo(all_matches.col(step));
-      write_feature(h5f, match,
-                    membrane_feature_name(windowsize, membranewidth, angle).c_str());
+      feature_callback(match,
+                       membrane_feature_name(windowsize, membranewidth, angle).c_str());
   }
 
   // Compute per-pixel min, max, span, median, mean, variance
   
   Mat temp, temp2;
   reduce(all_matches, temp, 1, CV_REDUCE_MIN);
-  write_feature(h5f, temp.reshape(0, image_in.rows), "membrane_min");
+  feature_callback(temp.reshape(0, image_in.rows), "membrane_min");
   reduce(all_matches, temp2, 1, CV_REDUCE_MAX);
-  write_feature(h5f, temp2.reshape(0, image_in.rows), "membrane_max");
+  feature_callback(temp2.reshape(0, image_in.rows), "membrane_max");
   temp = temp2 - temp;
-  write_feature(h5f, temp.reshape(0, image_in.rows), "membrane_span");
+  feature_callback(temp.reshape(0, image_in.rows), "membrane_span");
   float *amptr = all_matches.ptr<float>(), *tptr = temp.ptr<float>();
   for (int i = 0; i < all_matches.rows; i++, tptr++, amptr += NUM_ROTATIONS)
       *tptr = quickmedian(amptr, NUM_ROTATIONS);
-  write_feature(h5f, temp.reshape(0, image_in.rows), "membrane_median");
+  feature_callback(temp.reshape(0, image_in.rows), "membrane_median");
 
   // mean and variance
   reduce(all_matches, temp, 1, CV_REDUCE_AVG);
-  write_feature(h5f, temp.reshape(0, image_in.rows), "membrane_mean");
+  feature_callback(temp.reshape(0, image_in.rows), "membrane_mean");
   multiply(all_matches, all_matches, all_matches);
   multiply(temp, temp, temp);
   reduce(all_matches, temp2, 1, CV_REDUCE_AVG);
   temp2 -= temp;
-  write_feature(h5f, temp2.reshape(0, image_in.rows), "membrane_var");
+  feature_callback(temp2.reshape(0, image_in.rows), "membrane_var");
 }
