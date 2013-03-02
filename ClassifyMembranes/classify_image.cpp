@@ -176,6 +176,11 @@ int main(int argc, char** argv) {
   /* Make sure we've found features for every weak learner */
   assert (weak_learners.empty());
 
+  /* adjust features from logistic to probability */
+  prediction = -prediction;
+  exp(prediction, prediction);
+  prediction = 1.0 / (1.0 + prediction);
+
   /* write out prediction */
   write_feature(h5f, prediction, "probabilities");
 }
