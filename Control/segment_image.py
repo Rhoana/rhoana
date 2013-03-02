@@ -5,8 +5,8 @@ import subprocess
 def check_file(filename):
     # verify the file has the expected data
     import h5py
-    f = h5py.File(filename)
-    if set(f.keys()) != set(['segs', 'original_coords']):
+    f = h5py.File(filename, 'r')
+    if set(f.keys()) != set(['segmentations']):
         os.unlink(filename)
         return False
     return True
@@ -14,25 +14,23 @@ def check_file(filename):
 try:
     args = sys.argv[1:]
 
-    slice_file = args[0]
-    prob_file = args[1]
-    output_file = args[2]
-    coords = ",".join(args[3:])
+    image_file = args.pop(0)
+    classifier = args.pop(0)
+    probabilities_file = args.pop(0)
+    segmentations_file = args.pop(0)
 
-    if os.path.exists(output_file):
-        print output_file, "already exists"
-        if check_file(output_file):
+    if os.path.exists(segmentations_file):
+        print segmentations_file, "already exists"
+        if check_file(segmentations_file):
             sys.exit(0)
 
-    print "Computing probabilities", args
+    classify_prog = os.path.join(os.environ['CONNECTOME'], 'ClassifyMembranes', 'classify_image')
+    print "Computing probabilities:", classify_prog, image_file, classifier, probabilities_file
+    subprocess.check_call([classify_prog, image_file, classifier, probabilities_file], env=os.environ)
 
-    cubedir = os.path.join(os.environ['CONNECTOME'], 'Pipeline', 'CubeDicing')
-    os.environ['MATLABPATH'] = cubedir
-
-    command = "try, segment_image('%s', '%s', '%s', %s), catch err, display(getReport(err, 'extended')), exit(1), end, exit(0)"
-    command = command % (slice_file, prob_file, output_file, coords)
-    print "Running matlab command:", command
-    subprocess.check_call(['matlab', '-nojvm', '-nodesktop', '-nosplash', '-r', command], env=os.environ) 
-    assert check_file(output_file), "Bad data in file, exiting!"
+    segmentation_prog = os.path.join(os.environ['CONNECTOME'], 'Segment', 'segment.py')
+    print "Computing segmentations:", segmentation_prog, probabilities_file, segmentations_file
+    subprocess.check_call(['python', '-i', segmentation_prog, probabilities_file, segmentations_file], env=os.environ)
+    assert check_file(segmentations_file), "Bad data in file, exiting!"
 except KeyboardInterrupt:
     pass
