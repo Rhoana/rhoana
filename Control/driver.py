@@ -32,7 +32,7 @@ class Job(object):
                                "-r",
                                "-R", "rusage[mem=16000]" if "FusedBlock" in self.name else "rusage[mem=10000]",
                                "-g", "/diced_connectome",
-                               "-q", FUSED_QUEUE if "FusedBlock" in self.name else "short_serial" ,
+                               "-q", FUSED_QUEUE if "FusedBlock" in self.name else "normal_serial" ,
                                "-J", self.name,
                                "-o", "logs/out." + self.name,
                                "-e", "logs/error." + self.name,
@@ -113,6 +113,24 @@ class Subimage_SegmentedSlice(Job):
     def command(self):
         return ['python', 'segment_image.py', self.raw_image, self.probability_map.output, self.output] + \
             self.coords + self.core_coords
+
+class ClassifySegement_Image(Job):
+    def __init__(self, idx, raw_image, classifier_file):
+        Job.__init__(self)
+        self.already_done = False
+        self.raw_image = raw_image
+        self.classifier_file = classifier_file
+        self.dependencies = []
+        self.prob_file = os.path.join('segmentations',
+                                      'probs_%d.hdf5' % (idx))
+        self.output = os.path.join('segmentations',
+                                   'segs_%d.hdf5' % (idx))
+
+    def command(self):
+        return ['python',
+                os.path.join(os.environ['CONNECTOME'], 'Control', 'segment_image.py'),
+                self.raw_image, self.classifier_file, self.prob_file, self.output]
+
 
 class Block(Job):
     def __init__(self, segmented_slices, indices, *args):
@@ -272,34 +290,13 @@ if __name__ == '__main__':
     assert 'VIRTUAL_ENV' in os.environ
 
     images = [f.rstrip() for f in open(sys.argv[1])]
+    classifier_file = os.path.join(os.environ['CONNECTOME'], 'ClassifyMembranes', 'GB_classifier.txt')
 
-    # Dice raw images and cmopute probability maps
-    subimage_probability_maps = [dice(Subimage_ProbabilityMap,
-                                      (f, idx),
-                                      (image_size, image_size),
-                                      (probability_subimage_size, probability_subimage_size),
-                                      (probability_subimage_halo, probability_subimage_halo))
-                                 for idx, f in enumerate(images)]
-
-    # Reassemble full probability maps
-    probability_maps = [Reassemble('improb', (image_size, image_size),
-                                   subs, os.path.join('probabilities', 'prob_%d.hdf5' % idx))
-                        for idx, subs in enumerate(subimage_probability_maps)]
-
-    # Dice probability maps and compute segmentations
-    subimage_segmentations = [dice(Subimage_SegmentedSlice,
-                                   (idx, pm, raw_image),
-                                   (image_size, image_size),
-                                   (segmentation_subimage_size, segmentation_subimage_size),
-                                   (segmentation_subimage_halo, segmentation_subimage_halo))
-                              for idx, (pm, raw_image) in enumerate(zip(probability_maps, images))]
-
-    # Reassemble full segmentation maps
-    segmentations = [Reassemble('segs', (image_size, image_size, -1),
-                                subs, os.path.join('segmentations', 'segs_%d.hdf5' % idx))
-                     for idx, subs in enumerate(subimage_segmentations)]
-
-
+    segmentations = [ClassifySegement_Image(idx, im, classifier_file)
+                     for idx, im in enumerate(images)]
+    Job.run_all()
+    asdf
+    
     # Dice full volume
     blocks = {}
     for block_idx_z in range((len(segmentations) - 2 * block_z_halo) / block_z_size):

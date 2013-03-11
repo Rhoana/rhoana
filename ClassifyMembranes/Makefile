@@ -1,5 +1,5 @@
-OPENCV=/Users/thouis/opencv-install
-HDF5_DIR=/Users/thouis/homebrew/Cellar/hdf5/1
+OPENCV=/n/home02/thouis_jones/opencv-install
+HDF5_DIR=/n/home02/thouis_jones/HDF5-install
 CXXFLAGS=-I$(OPENCV)/include -I$(HDF5_DIR)/include -g -O3
 LDFLAGS=-L$(OPENCV)/lib -lopencv_highgui -lopencv_imgproc -lopencv_core -L$(HDF5_DIR)/lib -lhdf5_cpp -lhdf5
 
