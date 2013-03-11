@@ -6,7 +6,7 @@ def check_file(filename):
     # verify the file has the expected data
     import h5py
     f = h5py.File(filename, 'r')
-    if set(f.keys()) != set(['segmentations']):
+    if set(f.keys()) != set(['segmentations', 'probabilities']):
         os.unlink(filename)
         return False
     return True
@@ -30,7 +30,7 @@ try:
 
     segmentation_prog = os.path.join(os.environ['CONNECTOME'], 'Segment', 'segment.py')
     print "Computing segmentations:", segmentation_prog, probabilities_file, segmentations_file
-    subprocess.check_call(['python', '-i', segmentation_prog, probabilities_file, segmentations_file], env=os.environ)
+    subprocess.check_call(['python', segmentation_prog, probabilities_file, segmentations_file], env=os.environ)
     assert check_file(segmentations_file), "Bad data in file, exiting!"
 except KeyboardInterrupt:
     pass

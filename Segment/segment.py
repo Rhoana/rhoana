@@ -28,7 +28,8 @@ imshape = norm_image.shape
 
 orient_image = np.zeros([imshape[0], imshape[1], n_orientations], dtype=np.float32)
 
-prob_image = input_hdf5['probabilities'][...]
+prob_dset = input_hdf5['probabilities']
+prob_image = prob_dset[...]
 
 for oi in range(n_orientations):
     orientation_angle = int(orientation_step * oi)
@@ -135,6 +136,14 @@ segmentations = out_hdf5.create_dataset('segmentations',
                                         dtype=np.bool,
                                         chunks=(256, 256, 1),
                                         compression='gzip')
+
+# copy the probabilities for future use
+probs_out = out_hdf5.create_dataset('probabilities',
+                                    prob_image.shape,
+                                    dtype = prob_image.dtype,
+                                    chunks = prob_dset.chunks,
+                                    compression='gzip')
+probs_out[...] = prob_image
 
 for di, direction in enumerate(directions):
 
@@ -347,6 +356,8 @@ for probability_threshold in probability_thresholds:
             segmentations[:,:,segmentation_count] = ws_boundary > 0
             segmentation_count = segmentation_count + 1
             print "Segmentation {0} produced aftert {1} seconds".format(segmentation_count, int(time.time() - main_st))
+
+
 
 # move to final destination
 out_hdf5.close()
