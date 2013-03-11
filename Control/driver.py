@@ -138,11 +138,11 @@ class Block(Job):
         self.already_done = True
         self.segmented_slices = segmented_slices
         self.dependencies = segmented_slices
-        self.args = [str(a) for a in args]
         self.output = os.path.join('bigdicedblocks', 'block_%d_%d_%d.hdf5' % indices)
+        self.args = [str(a) for a in args] + [self.output]
 
     def command(self):
-        return ['./dice_block.sh'] + self.args + [s.output for s in self.dependencies] + [self.output]
+        return ['python', './dice_block.py'] + self.args + [s.output for s in self.dependencies]
 
 class FusedBlock(Job):
     def __init__(self, block, indices, global_block_number):
