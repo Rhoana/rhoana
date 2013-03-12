@@ -8,9 +8,9 @@ import fast64counter
 DEBUG = False
 
 def work_by_chunks(dataset):
-    xchunk, ychunk = dataset.chunks[-2:]
-    for xbase in range(0, dataset.shape[-2], xchunk):
-        for ybase in range(0, dataset.shape[-1], ychunk):
+    ychunk, xchunk = dataset.chunks[:2]
+    for xbase in range(0, dataset.shape[0], xchunk):
+        for ybase in range(0, dataset.shape[1], ychunk):
             yield slice(xbase, xbase + xchunk), slice(ybase, ybase + ychunk)
 
 def condense_labels(depth, numsegs, labels):
@@ -27,7 +27,7 @@ def condense_labels(depth, numsegs, labels):
     overlap_counter = fast64counter.ValueCountInt64()
     sublabel_offset = 0
     for xslice, yslice in work_by_chunks(labels):
-        chunklabels = [labels[S, depth, xslice, yslice][...] for S in range(numsegs)]
+        chunklabels = [labels[yslice, xslice, depth, S][...] for S in range(numsegs)]
         projected = chunklabels[0] > 0
         for S in range(1, numsegs):
             projected &= chunklabels[S] > 0  # Mask out boundaries
@@ -55,15 +55,6 @@ def condense_labels(depth, numsegs, labels):
         # keep the first, but zero the rest
         if len(original_label_list) > 1:
             remapper[original_label_list[1:]] = 0
-#             for l in original_label_list:
-#                 pylab.figure()
-#                 for s in range(numsegs):
-#                     mask = labels[s, depth, :, :] == l
-#                     if np.any(mask):
-#                         pylab.imshow(mask)
-#                         pylab.title('label %d at depth %d' % (l, s))
-#                         break
-#             pylab.show()
 
     # pack the labels in the remapper
     final_label_count = np.sum(remapper > 0)
@@ -73,11 +64,11 @@ def condense_labels(depth, numsegs, labels):
     # remap the labels by chunk
     for xslice, yslice in work_by_chunks(labels):
         for S in range(numsegs):
-            l = labels[S, depth, xslice, yslice]
-            labels[S, depth, xslice, yslice] = remapper[l]
+            l = labels[yslice, xslice, depth, S]
+            labels[yslice, xslice, depth, S] = remapper[l]
 
     if DEBUG:
-        assert len(np.unique(labels[:, depth, ...].ravel())) == final_label_count + 1
+        assert len(np.unique(labels[:, :, depth, :].ravel())) == final_label_count + 1
 
     return final_label_count
 
@@ -89,7 +80,7 @@ def count_overlaps_exclusionsets(depth, numsegs, labels, link_worth):
     for xslice, yslice in work_by_chunks(labels):
         for D in range(depth):
             for Seg in range(numsegs):
-                lbls = labels[Seg, D, xslice, yslice][...]
+                lbls = labels[yslice, xslice, depth, S][...]
                 areacounter.add_values_32(lbls.ravel())
     keys, areas = areacounter.get_counts()
     areas = areas[np.argsort(keys)]
@@ -103,7 +94,7 @@ def count_overlaps_exclusionsets(depth, numsegs, labels, link_worth):
             print "exl depth", D
             excls = set()
             for xslice, yslice in work_by_chunks(labels):
-                subimages = [labels[Seg, D, xslice, yslice][...].ravel() for Seg in range(numsegs)]
+                subimages = [labels[yslice, xslice, D, Seg][...].ravel() for Seg in range(numsegs)]
                 excls.update(set(zip(*subimages)))
             # filter out zeros
             excls = set(tuple(i for i in s if i) for s in excls)
@@ -115,8 +106,8 @@ def count_overlaps_exclusionsets(depth, numsegs, labels, link_worth):
         overlap_areas = fast64counter.ValueCountInt64()
         for D in range(depth - 1):
             for xslice, yslice in work_by_chunks(labels):
-                subimages_d1 = [labels[Seg, D, xslice, yslice][...].ravel() for Seg in range(numsegs)]
-                subimages_d2 = [labels[Seg, D + 1, xslice, yslice][...].ravel() for Seg in range(numsegs)]
+                subimages_d1 = [labels[yslice, xslice, D, Seg][...].ravel() for Seg in range(numsegs)]
+                subimages_d2 = [labels[yslice, xslice, D+1, Seg][...].ravel() for Seg in range(numsegs)]
                 for s1 in subimages_d1:
                     for s2 in subimages_d2:
                         overlap_areas.add_values_pair32(s1, s2)

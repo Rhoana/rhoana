@@ -46,9 +46,9 @@ def offset_labels(depth, seg, labels, offset):
     if offset == 0:
         return
     for xslice, yslice in overlaps.work_by_chunks(labels):
-        l = labels[seg, depth, xslice, yslice][...]
+        l = labels[yslice, xslice, depth, seg][...]
         l[l > 0] += offset
-        labels[seg, depth, xslice, yslice] = l
+        labels[yslice, xslice, depth, seg] = l
 
 def build_model(areas, exclusions, links):
     ##################################################
@@ -119,10 +119,10 @@ if __name__ == '__main__':
     ##################################################
     # compute all overlaps between multisegmentations
     ##################################################
-    numsegs, depth, width, height = segmentations.shape
+    height, width, depth, numsegs = segmentations.shape
 
     # ensure we can store all the labels we need to
-    assert (width * height * depth * numsegs) < (2 ** 31 - 1), \
+    assert (height * width * depth * numsegs) < (2 ** 31 - 1), \
         "Cube too large.  Must be smaller than 2**31 - 1 voxels."
 
     largest_index = depth * numsegs * width * height
@@ -146,14 +146,14 @@ if __name__ == '__main__':
     condense_labels = timed(overlaps.condense_labels)
 
     lf = h5py.File(output_path + '_partial', 'w')
-    chunking = [1, 1, chunksize, chunksize]
+    chunking = [chunksize, chunksize, 1, 1]
     labels = lf.create_dataset('seglabels', segmentations.shape, dtype=np.int32, chunks=tuple(chunking), compression='gzip')
     total_regions = 0
     cross_D_offset = 0
     for D in range(depth):
         this_D_offset = 0
         for Seg in range(numsegs):
-            temp, numregions = ndimage_label(segmentations[Seg, D, :, :][...], output=np.int32)
+            temp, numregions = ndimage_label(segmentations[:, :, D, Seg][...], output=np.int32)
             labels[Seg, D, :, :] = temp
             offset_labels(D, Seg, labels, this_D_offset)
             this_D_offset += numregions
@@ -168,7 +168,7 @@ if __name__ == '__main__':
     print cross_D_offset, "total labels", total_regions, "before condensing"
 
     if DEBUG:
-        assert np.max(labels) == cross_D_offset 
+        assert np.max(labels) == cross_D_offset
 
     areas, exclusions, links = overlaps.count_overlaps_exclusionsets(depth, numsegs, labels, link_worth)
     num_segments = len(areas)
@@ -227,15 +227,14 @@ if __name__ == '__main__':
         l1, l2 = links_to_segs[linkidx]
         assert segment_map[l1] == segment_map[l2]
 
-    # Condense results
-    out_labels = lf.create_dataset('labels', [depth, width, height], dtype=np.uint64, chunks=tuple(chunking[1:]), compression='gzip')
+    # Condense results<
+    out_labels = lf.create_dataset('labels', [height, width, depth], dtype=np.uint64, chunks=tuple(chunking[:-1]), compression='gzip')
     for D in range(depth):
         for Seg in range(numsegs):
-            if (out_labels[D, :, :][...].astype(bool) * segment_map[labels[Seg, D, :, :]].astype(bool)).sum() != 0:
-                badsegs = out_labels[D, :, :][...].astype(bool) * segment_map[labels[Seg, D, :, :]].astype(bool) != 0
-                print "BAD", out_labels[D, :, :][badsegs], segment_map[labels[Seg, D, :, :]][badsegs]
-            
-            out_labels[D, :, :] |= segment_map[labels[Seg, D, :, :]]
+            if (out_labels[:, :, D][...].astype(bool) * segment_map[labels[:, :, D, Seg]].astype(bool)).sum() != 0:
+                badsegs = out_labels[:, :, D][...].astype(bool) * segment_map[labels[:, :, D, Seg]].astype(bool) != 0
+                print "BAD", out_labels[:, :, D][badsegs], segment_map[labels[:, :, D, Seg]][badsegs]
+            out_labels[:, :, D] |= segment_map[labels[:, :, D, Seg]]
 
     # move to final location
     if os.path.exists(output_path):
