@@ -114,7 +114,7 @@ def build_model(areas, exclusions, links):
     return model, link_to_segs
 
 if __name__ == '__main__':
-    segmentations = h5py.File(sys.argv[1])['cubesegs']
+    segmentations = h5py.File(sys.argv[1])['segmentations']
 
     ##################################################
     # compute all overlaps between multisegmentations
@@ -154,7 +154,7 @@ if __name__ == '__main__':
         this_D_offset = 0
         for Seg in range(numsegs):
             temp, numregions = ndimage_label(segmentations[:, :, D, Seg][...], output=np.int32)
-            labels[Seg, D, :, :] = temp
+            labels[:, :, D, Seg] = temp
             offset_labels(D, Seg, labels, this_D_offset)
             this_D_offset += numregions
             total_regions += numregions

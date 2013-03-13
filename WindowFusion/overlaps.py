@@ -80,7 +80,7 @@ def count_overlaps_exclusionsets(depth, numsegs, labels, link_worth):
     for xslice, yslice in work_by_chunks(labels):
         for D in range(depth):
             for Seg in range(numsegs):
-                lbls = labels[yslice, xslice, depth, S][...]
+                lbls = labels[yslice, xslice, D, Seg][...]
                 areacounter.add_values_32(lbls.ravel())
     keys, areas = areacounter.get_counts()
     areas = areas[np.argsort(keys)]
