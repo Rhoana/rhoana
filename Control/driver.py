@@ -30,7 +30,7 @@ class Job(object):
         subprocess.check_call(["bsub",
                                "-Q", "all ~0",
                                "-r",
-                               "-R", "rusage[mem=16000]" if "FusedBlock" in self.name else "rusage[mem=10000]",
+                               "-R", "rusage[mem=16000]" if "FusedBlock" in self.name else "rusage[mem=16000]",
                                "-g", "/diced_connectome",
                                "-q", FUSED_QUEUE if "FusedBlock" in self.name else "normal_serial" ,
                                "-J", self.name,
@@ -135,14 +135,14 @@ class ClassifySegement_Image(Job):
 class Block(Job):
     def __init__(self, segmented_slices, indices, *args):
         Job.__init__(self)
-        self.already_done = True
+        self.already_done = False
         self.segmented_slices = segmented_slices
         self.dependencies = segmented_slices
         self.output = os.path.join('bigdicedblocks', 'block_%d_%d_%d.hdf5' % indices)
         self.args = [str(a) for a in args] + [self.output]
 
     def command(self):
-        return ['python', './dice_block.py'] + self.args + [s.output for s in self.dependencies]
+        return ['python', os.path.join(os.environ['CONNECTOME'], 'Control', 'dice_block.py')] + self.args + [s.output for s in self.dependencies]
 
 class FusedBlock(Job):
     def __init__(self, block, indices, global_block_number):
@@ -155,7 +155,8 @@ class FusedBlock(Job):
         self.output = os.path.join('bigfusedblocks', 'fusedblock_%d_%d_%d.hdf5' % indices)
 
     def command(self):
-        return ['./window_fusion.sh',
+        return ['python',
+                os.path.join(os.environ['CONNECTOME'], 'WindowFusion', 'window_fusion_cpx.py'),
                 self.block.output,
                 str(self.global_block_number),
                 self.output]
@@ -294,8 +295,6 @@ if __name__ == '__main__':
 
     segmentations = [ClassifySegement_Image(idx, im, classifier_file)
                      for idx, im in enumerate(images)]
-    Job.run_all()
-    asdf
     
     # Dice full volume
     blocks = {}
@@ -311,10 +310,14 @@ if __name__ == '__main__':
                 blocks[block_idx_x, block_idx_y, block_idx_z] = \
                     Block(segmentations[lo_slice:hi_slice],
                           (block_idx_x, block_idx_y, block_idx_z),
-                          xlo + 1, ylo + 1, xhi, yhi)  # matlab indexing
+                          xlo, ylo, xhi, yhi)
 
     # Window fuse all blocks
     fused_blocks = dict((idxs, FusedBlock(block, idxs, num)) for num, (idxs, block) in enumerate(blocks.iteritems()))
+
+    Job.run_all()
+    asdf
+
     # Pairwise match all blocks.
     #
     # We overwrite each block in fused_blocks (the python dict, not the file)
