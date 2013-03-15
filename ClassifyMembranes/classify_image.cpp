@@ -51,12 +51,13 @@ static vector<struct WL> weak_learners;
 static H5::H5File h5f;
 pthread_mutex_t add_feature_lock;
 pthread_mutex_t write_feature_lock;
-static float wait_add_time = 0;
-static float wait_write_time = 0;
+static float add_time = 0;
+static float write_time = 0;
 
 bool should_save(const char *name)
 {
     string s = string(name);
+    return false;
     if (s == "original") return true;
     if ((s.find("membrane") == 0) &&
         (s[s.size() - 1] >= '0') &&
@@ -68,10 +69,8 @@ void add_feature(const Mat &image, const char *name)
 {
     time_t time_in, time_out;
 
-    time(&time_in);
     pthread_mutex_lock(&add_feature_lock);
-    time(&time_out);
-    wait_add_time += difftime(time_out, time_in);
+    time(&time_in);
 
     int found = 0;
     string _name = string(name);
@@ -83,35 +82,38 @@ void add_feature(const Mat &image, const char *name)
     } else {
       _image = image;
     }
-    for (int wi = 0; wi < weak_learners.size(); wi++) {
-        if (weak_learners[wi].feature_name == _name) {
-            found = 1;
-            float *score_ptr = prediction.ptr<float>(0);
-            const float *feature_ptr = _image.ptr<float>(0);
-            float thresh = weak_learners[wi].threshold;
-            float left_val = weak_learners[wi].left_val;
-            float right_val = weak_learners[wi].right_val;
-            for (int i = 0; i < prediction.total(); i++, feature_ptr++, score_ptr++)
-                    *score_ptr += ((*feature_ptr <= thresh) ? left_val : right_val);
+
+    // move current features to the end
+    vector<struct WL>::iterator cur_learners = remove(weak_learners.begin(), weak_learners.end(), name);
+
+    float *score_ptr = prediction.ptr<float>(0);
+    const float *feature_ptr = _image.ptr<float>(0);
+    cilk_for (int i = 0; i < prediction.total(); i++) {
+        for (vector<struct WL>::iterator cl = cur_learners; cl < weak_learners.end(); cl++) {
+            float thresh = cl->threshold;
+            float left_val = cl->left_val;
+            float right_val = cl->right_val;
+            score_ptr[i] += ((feature_ptr[i] <= thresh) ? left_val : right_val);
         }
     }
-    if (! found)
+    if (cur_learners == weak_learners.end())
         cout << "Didn't find any uses of feature " << name << endl;
 
-    
     // remove old weak learners from consideration
-    weak_learners.erase(remove(weak_learners.begin(), weak_learners.end(), name), weak_learners.end());
+    weak_learners.erase(cur_learners, weak_learners.end());
 
+    time(&time_out);
+    add_time += difftime(time_out, time_in);
     pthread_mutex_unlock(&add_feature_lock);
 
     if (should_save(name)) {
-        time(&time_in);
         pthread_mutex_lock(&write_feature_lock);
-        time(&time_out);
-        wait_write_time += difftime(time_out, time_in);
+        time(&time_in);
         write_feature(h5f, image, name);
         pthread_mutex_unlock(&write_feature_lock);
         cout << "Wrote " << name << endl;
+        time(&time_out);
+        write_time += difftime(time_out, time_in);
     }
 }
 
@@ -225,7 +227,6 @@ int main(int argc, char** argv) {
   /* write out prediction */
   write_feature(h5f, prediction, "probabilities");
 
-  
-  cout << "Time waiting for add lock: " << wait_add_time << endl;
-  cout << "Time waiting for write lock: " << wait_write_time << endl;
+  cout << "Time adding features: " << add_time << endl;
+  cout << "Time writing: " << write_time << endl;
 }
