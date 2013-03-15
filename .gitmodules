@@ -1,0 +1,3 @@
+[submodule "blosc"]
+	path = blosc
+	url = https://github.com/FrancescAlted/blosc.git

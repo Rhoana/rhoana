@@ -5,7 +5,7 @@ LDFLAGS=-L$(OPENCV)/lib -lopencv_highgui -lopencv_imgproc -lopencv_core -L$(HDF5
 
 all: compute_features show_features test_image_to_hdf5 train_randomforest predict_randomforest train_gb predict_gb classify_image
 
-BLOSC_DIR=/export/opt0/thouis_tmp/blosc
+BLOSC_DIR=../blosc
 BLOSC_SRCS=$(wildcard $(BLOSC_DIR)/blosc/*.c $(BLOSC_DIR)/hdf5/blosc_filter.c)
 BLOSC_O=$(BLOSC_SRCS:.c=.o)
 
