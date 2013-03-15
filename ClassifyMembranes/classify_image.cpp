@@ -59,12 +59,19 @@ void add_feature(const Mat &image, const char *name)
     assert (prediction.size() == image.size());
     int found = 0;
     string _name = string(name);
-    cout << "Got feature " << name << endl;
+    cout << "Got feature " << name << " size " << image.rows << " " << image.cols << endl;
+    assert (prediction.size() == image.size());
+    Mat _image;
+    if (image.depth() != CV_32F) {
+      image.convertTo(_image, CV_32F);
+    } else {
+      _image = image;
+    }
     for (int wi = 0; wi < weak_learners.size(); wi++) {
         if (weak_learners[wi].feature_name == _name) {
             found = 1;
             float *score_ptr = prediction.ptr<float>(0);
-            const float *feature_ptr = image.ptr<float>(0);
+            const float *feature_ptr = _image.ptr<float>(0);
             float thresh = weak_learners[wi].threshold;
             float left_val = weak_learners[wi].left_val;
             float right_val = weak_learners[wi].right_val;
