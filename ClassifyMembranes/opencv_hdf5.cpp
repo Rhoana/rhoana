@@ -1,10 +1,14 @@
 #include <opencv/cv.h>
 #include <H5Cpp.h>
 #include <assert.h>
+extern "C" {
+#include "blosc.h"
+#include "blosc_filter.h"
+}
+
 using namespace cv;
 using namespace H5;
 using namespace std;
-
 
 static Size imsize;
 H5File create_feature_file(char *filename, const Mat &base_image)
@@ -17,16 +21,25 @@ H5File open_feature_file(char *filename)
 {
     return H5File(filename, H5F_ACC_RDONLY);
 }
-    
 
 static DataSet create_dataset(H5File h5f, const char *name)
 {
+    static int blosc_initialized = 0;
+    if (! blosc_initialized) {
+        char *version, *date;
+        int r;
+        r = register_blosc(&version, &date);
+        cout << "Blosc " << version << " " << date << endl;
+        blosc_set_nthreads(8);
+        assert (r >= 0);
+        blosc_initialized = 1;
+    }
+
     DSetCreatPropList cparms;
-    hsize_t chunk_dims[2] = {256, 256};
+    hsize_t chunk_dims[2] = {1024, 1024};
     hsize_t dims[2];
     cparms.setChunk(2, chunk_dims);
-    cparms.setShuffle();
-    cparms.setDeflate(5);
+    cparms.setFilter(FILTER_BLOSC, H5Z_FLAG_OPTIONAL, 0, NULL);
     dims[0] = imsize.height;
     dims[1] = imsize.width;
   

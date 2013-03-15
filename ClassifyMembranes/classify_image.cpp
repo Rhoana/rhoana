@@ -8,6 +8,11 @@
 using namespace cv;
 using namespace std;
 
+#include <cilk/cilk.h>
+#include <cilk/cilk_api.h>
+#include <pthread.h> // for mutex
+#include <time.h>
+
 H5::H5File create_feature_file(char *filename, const Mat &image);
 void write_feature(H5::H5File h5file, const Mat &image, const char *name);
 
@@ -40,9 +45,14 @@ struct WL {
     }
 };
 
+// Used in classification and saving callbacks
 static Mat_<float> prediction;
 static vector<struct WL> weak_learners;
 static H5::H5File h5f;
+pthread_mutex_t add_feature_lock;
+pthread_mutex_t write_feature_lock;
+static float wait_add_time = 0;
+static float wait_write_time = 0;
 
 bool should_save(const char *name)
 {
@@ -56,15 +66,28 @@ bool should_save(const char *name)
 
 void add_feature(const Mat &image, const char *name)
 {
-    assert (prediction.size() == image.size());
+    time_t time_in, time_out;
+
+    time(&time_in);
+    pthread_mutex_lock(&add_feature_lock);
+    time(&time_out);
+    wait_add_time += difftime(time_out, time_in);
+
     int found = 0;
     string _name = string(name);
-    cout << "Got feature " << name << endl;
+    cout << "Got feature " << name << " size " << image.rows << " " << image.cols << endl;
+    assert (prediction.size() == image.size());
+    Mat _image;
+    if (image.depth() != CV_32F) {
+      image.convertTo(_image, CV_32F);
+    } else {
+      _image = image;
+    }
     for (int wi = 0; wi < weak_learners.size(); wi++) {
         if (weak_learners[wi].feature_name == _name) {
             found = 1;
             float *score_ptr = prediction.ptr<float>(0);
-            const float *feature_ptr = image.ptr<float>(0);
+            const float *feature_ptr = _image.ptr<float>(0);
             float thresh = weak_learners[wi].threshold;
             float left_val = weak_learners[wi].left_val;
             float right_val = weak_learners[wi].right_val;
@@ -79,15 +102,27 @@ void add_feature(const Mat &image, const char *name)
     // remove old weak learners from consideration
     weak_learners.erase(remove(weak_learners.begin(), weak_learners.end(), name), weak_learners.end());
 
-    if (should_save(name))
+    pthread_mutex_unlock(&add_feature_lock);
+
+    if (should_save(name)) {
+        time(&time_in);
+        pthread_mutex_lock(&write_feature_lock);
+        time(&time_out);
+        wait_write_time += difftime(time_out, time_in);
         write_feature(h5f, image, name);
+        pthread_mutex_unlock(&write_feature_lock);
+        cout << "Wrote " << name << endl;
+    }
 }
 
 int main(int argc, char** argv) {
+  int numWorkers = __cilkrts_get_nworkers();
+  cout << "number of cilk workers = " << numWorkers << endl;
+
   /* Default values. */
   int windowsize = 19;
   int membranewidth = 3;
-  
+
   while (1) {
     int option_index = 0;
     int c = getopt_long (argc, argv, "w:m:", long_options, &option_index);
@@ -150,29 +185,35 @@ int main(int argc, char** argv) {
       weak_learners.push_back(temp);
   }
 
+  pthread_mutex_init(&add_feature_lock, NULL);
+  pthread_mutex_init(&write_feature_lock, NULL);
+
   /* compute and write features */
   
   /* FEATURE: Original image */
-  add_feature(image, "original");
-
-  /* FEATURE: normxcorr with small circles */
-  vesicles(image, add_feature);
+  Mat _image;
+  image.copyTo(_image);
+  cilk_spawn add_feature(_image, "original");
 
   /* normalize image */
   adapthisteq(image, image, 2);  // max CDF derivative of 2
 
   /* FEATURE: Normalized image */
-  add_feature(image, "adapthisteq");
+  cilk_spawn add_feature(image, "adapthisteq");
+
+  /* FEATURE: normxcorr with small circles */
+  cilk_spawn vesicles(image, add_feature);
 
   /* FEATURE: normalized cross-correlation with membrane template, with statistics */
-  membranes(image, windowsize, membranewidth, add_feature);
+  cilk_spawn membranes(image, windowsize, membranewidth, add_feature);
 
   /* FEATURE: local statistics: mean, variance, and pixel counts per-decile */
-  local_statistics(image, windowsize, add_feature);
+  cilk_spawn local_statistics(image, windowsize, add_feature);
 
   /* FEATURE: successively smoothed versions of (image, anisotropy, gradient magnitude) */
-  tensor_gradient(image, add_feature);
+  cilk_spawn tensor_gradient(image, add_feature);
 
+  cilk_sync;
   /* Make sure we've found features for every weak learner */
   assert (weak_learners.empty());
 
@@ -183,4 +224,8 @@ int main(int argc, char** argv) {
 
   /* write out prediction */
   write_feature(h5f, prediction, "probabilities");
+
+  
+  cout << "Time waiting for add lock: " << wait_add_time << endl;
+  cout << "Time waiting for write lock: " << wait_write_time << endl;
 }

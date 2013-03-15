@@ -30,8 +30,8 @@ void local_statistics(Mat &image_in, int windowsize, void (*feature_callback)(co
     feature_callback(var, "local_variance");
     
     // histogram features
-    Mat smoothed_count;
-    for (int i = 0; i < NUM_HIST; i++) {
+    cilk_for (int i = 0; i < NUM_HIST; i++) {
+      Mat smoothed_count;
         float threshold_lo = i * 256.0 / NUM_HIST;
         float threshold_hi = (i+1) * 256.0 / NUM_HIST;
         Mat mask = (image >= threshold_lo).mul(image < threshold_hi);

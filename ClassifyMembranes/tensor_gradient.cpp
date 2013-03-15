@@ -2,6 +2,8 @@
 #include <opencv/cv.h>
 #include <opencv/highgui.h>
 
+#include <cilk/cilk.h>
+
 using namespace cv;
 using namespace std;
 
@@ -21,7 +23,7 @@ string dog_name(int sigma1, int sigma2)
     return string(s.str());
 }
 
-void tensor_gradient(Mat &image_in, void (*feature_callback)(const Mat &image, const char *name))
+void _tensor_gradient(Mat &image_in, void (*feature_callback)(const Mat &image, const char *name))
 {
     Mat image;
     image_in.convertTo(image, CV_32F);
@@ -51,23 +53,39 @@ void tensor_gradient(Mat &image_in, void (*feature_callback)(const Mat &image, c
     // Compute smoothings of image, gradient magnitude, and anisotropy.
     // Also compute differences of gaussians.
     Mat smoothed_ims[NUM_SMOOTHINGS];
-    Mat smoothed_aniso;
-    Mat smoothed_mag;
-    for (int i = 0; i < NUM_SMOOTHINGS; i++) {
+    // Large DoG (woof!)
+    Mat g50;
+    // This takes a while, so we start it while the other smoothings are occuring
+    cilk_spawn [&] {GaussianBlur(image, g50, Size(0, 0), 50);}();
+
+    cilk_for (int i = 0; i < NUM_SMOOTHINGS; i++) {
+      Mat smoothed_aniso;
+      Mat smoothed_mag;
         GaussianBlur(image, smoothed_ims[i], Size(0, 0), i + 1);
         feature_callback(smoothed_ims[i], smoothed_name(i + 1, "image").c_str());
         GaussianBlur(anisotropy, smoothed_aniso, Size(0, 0), i + 1);
         feature_callback(smoothed_aniso, smoothed_name(i + 1, "anisotropy").c_str());
         GaussianBlur(magnitude, smoothed_mag, Size(0, 0), i + 1);
         feature_callback(smoothed_mag, smoothed_name(i + 1, "magnitude").c_str());
+    }
+
+    cilk_sync; // wait for g50
+
+    cilk_spawn [&] {feature_callback(smoothed_ims[1] - g50, "DoG_2_50");}();
+
+    for (int i = 0; i < NUM_SMOOTHINGS; i++) {
         for (int j = 0; j < i - 1; j+= 2) {
-            Mat DoG = smoothed_ims[i] - smoothed_ims[j];
-            feature_callback(DoG, dog_name(i + 1, j + 1).c_str());
+            cilk_spawn [&] (int _i, int _j) {
+                Mat DoG = smoothed_ims[_i] - smoothed_ims[_j];
+                feature_callback(DoG, dog_name(_i + 1, _j + 1).c_str());
+            }(i, j);
         }
     }
 
-    // Large DoG (woof!)
-    Mat g50;
-    GaussianBlur(image, g50, Size(0, 0), 50);
-    feature_callback(smoothed_ims[1] - g50, "DoG_2_50");
+    cilk_sync; // prevent any images from being destroyed before we finish with them
+}
+
+void tensor_gradient(Mat &image_in, void (*feature_callback)(const Mat &image, const char *name))
+{
+    _tensor_gradient(image_in, feature_callback);
 }

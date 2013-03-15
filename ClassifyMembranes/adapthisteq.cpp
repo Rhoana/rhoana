@@ -1,6 +1,7 @@
 #include <opencv/cv.h>
 #include <opencv/highgui.h>
 #include <assert.h>
+#include <cilk/cilk.h>
 
 using namespace cv;
 using namespace std;
@@ -15,7 +16,7 @@ void hist(const Mat &in, Mat &out)
     bool uniform = true; bool accumulate = false;
     calcHist(&in, 1, 0, Mat(), out, 1, &histSize, &histRange, uniform, accumulate);
 }
-                
+
 void clamp_and_cumsum(Mat &hist, float regularizer)
 {
     float total_pixels = sum(hist)[0];
@@ -41,7 +42,7 @@ void clamp_and_cumsum(Mat &hist, float regularizer)
         *ptr = accum;
         accum += temp;
     }
-    
+
     // redistribute excess, and normalize to 0-255
     float scale = 255.0 / (hist.at<float>(255) + excess);
     float last = 0.0;
@@ -77,8 +78,8 @@ void adapthisteq(const Mat &in, Mat &out, float regularizer)
     Rect imrect(0, 0, in.cols, in.rows);
 
     // compute histograms in 8x8 subimages
-    for (int i = 0; i < 8; i++)
-        for (int j = 0; j < 8; j++) {
+    cilk_for (int i = 0; i < 8; i++)
+        cilk_for (int j = 0; j < 8; j++) {
             Rect sub(i * block_width, j * block_height,
                      block_width, block_height);
             if ((i == 7) || (j == 7))
@@ -87,14 +88,10 @@ void adapthisteq(const Mat &in, Mat &out, float regularizer)
         }
 
     // clamp histograms and compute remapping function (in place)
-    for (int i = 0; i < 8; i++)
-        for (int j = 0; j < 8; j++)
+    cilk_for (int i = 0; i < 8; i++)
+        cilk_for (int j = 0; j < 8; j++)
             clamp_and_cumsum(localhists[i][j], regularizer);
-    
-    // weight function for normalization
-    Mat weight = Mat::zeros(in.size(), CV_32F);
-    Mat output = Mat::zeros(in.size(), CV_32F);
-    
+
     // region weighting mask
     Mat ROIweight(2 * block_height + 1, 2 * block_width + 1, CV_32F);
     for (int j = 0; j < 2 * block_height + 1; j++)
@@ -102,8 +99,11 @@ void adapthisteq(const Mat &in, Mat &out, float regularizer)
             ROIweight.at<float>(j, i) = (block_height - ABS(j - block_height)) *
                 (block_width - ABS(i - block_width));
 
-    for (int i = 0; i < 8; i++)
-        for (int j = 0; j < 8; j++) {
+    Mat sub_adapted[8][8];
+    Mat sub_weights[8][8];
+    Rect sub_rects[8][8];
+    cilk_for (int i = 0; i < 8; i++)
+        cilk_for (int j = 0; j < 8; j++) {
             // upper left corner of histogram window
             int corneri = i * block_width;
             int cornerj = j * block_height;
@@ -116,18 +116,28 @@ void adapthisteq(const Mat &in, Mat &out, float regularizer)
 
             // clip to actual image
             subrect &= imrect;
-            
+            sub_rects[i][j] = subrect;
+
             // find subimage ROI after clipping
             Rect subROI = Rect(0, 0, 2 * block_width + 1, 2 * block_height + 1) & \
                 Rect(-ROI_lo_i, -ROI_lo_j, in.cols, in.rows);
 
-            Mat temp(subrect.height, subrect.width, CV_32F);
+            sub_adapted[i][j].create(subrect.height, subrect.width, CV_32F);
 
             // locally transform
-            LUT(in(subrect), localhists[i][j], temp);
-            multiply(temp, ROIweight(subROI), temp);
-            output(subrect) += temp;
-            weight(subrect) += ROIweight(subROI);
+            LUT(in(subrect), localhists[i][j], sub_adapted[i][j]);
+            multiply(sub_adapted[i][j], ROIweight(subROI), sub_adapted[i][j]);
+            sub_weights[i][j] = ROIweight(subROI);
+        }
+
+    // weight function for normalization
+    Mat weight = Mat::zeros(in.size(), CV_32F);
+    Mat output = Mat::zeros(in.size(), CV_32F);
+
+    for (int i = 0; i < 8; i++)
+        for (int j = 0; j < 8; j++) {
+            output(sub_rects[i][j]) += sub_adapted[i][j];
+            weight(sub_rects[i][j]) += sub_weights[i][j];
         }
 
     output /= weight;
