@@ -57,12 +57,11 @@ static float write_time = 0;
 bool should_save(const char *name)
 {
     string s = string(name);
-    return false;
     if (s == "original") return true;
     if ((s.find("membrane") == 0) &&
         (s[s.size() - 1] >= '0') &&
         (s[s.size() - 1] <= '9')) return true;
-    return false;
+    return true;
 }
 
 void add_feature(const Mat &image, const char *name)
