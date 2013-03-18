@@ -162,11 +162,11 @@ int main(int argc, char** argv) {
   /* FEATURE: Original image */
   add_feature(image, "original");
 
-  /* FEATURE: normxcorr with small circles */
-  vesicles(image, add_feature);
-
   /* normalize image */
   adapthisteq(image, image, 2);  // max CDF derivative of 2
+
+  /* FEATURE: normxcorr with small circles */
+  vesicles(image, add_feature);
 
   /* FEATURE: Normalized image */
   add_feature(image, "adapthisteq");
