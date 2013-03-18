@@ -14,7 +14,9 @@ static Size imsize;
 H5File create_feature_file(char *filename, const Mat &base_image)
 {
     imsize = base_image.size();
-    return H5File(filename, H5F_ACC_TRUNC);
+    FileAccPropList acc_props;
+    acc_props.setCache(0, 0, 0, 0.0); // disable caching
+    return H5File(filename, H5F_ACC_TRUNC, FileCreatPropList::DEFAULT, acc_props);
 }
 
 H5File open_feature_file(char *filename)
@@ -83,6 +85,7 @@ void write_feature(H5File h5f, const Mat &image_in, const char *name)
         imdata = image.ptr<float>() - parent_ofs.x - parent_ofs.y * parent_size.width;
     }
     dataset.write(imdata, PredType::NATIVE_FLOAT, imspace);
+    dataset.close();
 }
 
 void read_feature(H5File h5f, Mat &image_out, const char *name, const Rect &roi=Rect(0,0,0,0))

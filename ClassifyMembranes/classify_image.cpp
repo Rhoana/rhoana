@@ -1,3 +1,4 @@
+#include <unistd.h>
 #include <stdlib.h>
 #include <opencv/cv.h>
 #include <opencv/highgui.h>
@@ -82,24 +83,25 @@ void add_feature(const Mat &image, const char *name)
       _image = image;
     }
 
-    // move current features to the end
-    vector<struct WL>::iterator cur_learners = remove(weak_learners.begin(), weak_learners.end(), name);
+    vector<struct WL> cur_learners;
+    copy_if(weak_learners.begin(), weak_learners.end(), back_inserter(cur_learners), [&] (struct WL &temp) {return (temp == _name);});
 
     float *score_ptr = prediction.ptr<float>(0);
     const float *feature_ptr = _image.ptr<float>(0);
     cilk_for (int i = 0; i < prediction.total(); i++) {
-        for (vector<struct WL>::iterator cl = cur_learners; cl < weak_learners.end(); cl++) {
+        for (vector<struct WL>::iterator cl = cur_learners.begin(); cl != cur_learners.end(); cl++) {
             float thresh = cl->threshold;
             float left_val = cl->left_val;
             float right_val = cl->right_val;
             score_ptr[i] += ((feature_ptr[i] <= thresh) ? left_val : right_val);
         }
     }
-    if (cur_learners == weak_learners.end())
+
+    if (cur_learners.empty())
         cout << "Didn't find any uses of feature " << name << endl;
 
     // remove old weak learners from consideration
-    weak_learners.erase(cur_learners, weak_learners.end());
+    weak_learners.erase(remove(weak_learners.begin(), weak_learners.end(), _name), weak_learners.end());
 
     time(&time_out);
     add_time += difftime(time_out, time_in);
@@ -226,6 +228,12 @@ int main(int argc, char** argv) {
   /* write out prediction */
   write_feature(h5f, prediction, "probabilities");
 
+  /* close the HDF5 */
+  time_t time_in, time_out;
+  time(&time_in);
+  h5f.close();
+  time(&time_out);
+  cout << "Time closing HDF5: " << difftime(time_out, time_in) << endl;
   cout << "Time adding features: " << add_time << endl;
   cout << "Time writing: " << write_time << endl;
 }
