@@ -51,7 +51,7 @@ bool should_save(const char *name)
     if ((s.find("membrane") == 0) &&
         (s[s.size() - 1] >= '0') &&
         (s[s.size() - 1] <= '9')) return true;
-    return true;
+    return false;
 }
 
 void add_feature(const Mat &image, const char *name)
