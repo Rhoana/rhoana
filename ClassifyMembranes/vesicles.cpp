@@ -2,8 +2,6 @@
 #include <opencv/cv.h>
 #include <opencv/highgui.h>
 
-#include "quickmedian.h"
-
 using namespace cv;
 using namespace std;
 
