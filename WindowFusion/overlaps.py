@@ -13,7 +13,7 @@ def work_by_chunks(dataset):
         for ybase in range(0, dataset.shape[1], ychunk):
             yield slice(xbase, xbase + xchunk), slice(ybase, ybase + ychunk)
 
-def condense_labels(depth, numsegs, labels):
+def condense_labels(Z, numsegs, labels):
     # project all labels at a given Z into a single plane, then merge any that
     # end up mapping to the same projected subregions (merge = remove one of
     # them)
@@ -27,7 +27,7 @@ def condense_labels(depth, numsegs, labels):
     overlap_counter = fast64counter.ValueCountInt64()
     sublabel_offset = 0
     for xslice, yslice in work_by_chunks(labels):
-        chunklabels = [labels[yslice, xslice, depth, S][...] for S in range(numsegs)]
+        chunklabels = [labels[yslice, xslice, S, Z][...] for S in range(numsegs)]
         projected = chunklabels[0] > 0
         for S in range(1, numsegs):
             projected &= chunklabels[S] > 0  # Mask out boundaries
@@ -64,23 +64,23 @@ def condense_labels(depth, numsegs, labels):
     # remap the labels by chunk
     for xslice, yslice in work_by_chunks(labels):
         for S in range(numsegs):
-            l = labels[yslice, xslice, depth, S]
-            labels[yslice, xslice, depth, S] = remapper[l]
+            l = labels[yslice, xslice, S, Z]
+            labels[yslice, xslice, S, Z] = remapper[l]
 
     if DEBUG:
-        assert len(np.unique(labels[:, :, depth, :].ravel())) == final_label_count + 1
+        assert len(np.unique(labels[:, :, :, Z].ravel())) == final_label_count + 1
 
     return final_label_count
 
 
 
-def count_overlaps_exclusionsets(depth, numsegs, labels, link_worth):
+def count_overlaps_exclusionsets(numslices, numsegs, labels, link_worth):
     areacounter = fast64counter.ValueCountInt64()
     # Count areas of each label
     for xslice, yslice in work_by_chunks(labels):
-        for D in range(depth):
+        for Z in range(numslices):
             for Seg in range(numsegs):
-                lbls = labels[yslice, xslice, D, Seg][...]
+                lbls = labels[yslice, xslice, Seg, Z][...]
                 areacounter.add_values_32(lbls.ravel())
     keys, areas = areacounter.get_counts()
     areas = areas[np.argsort(keys)]
@@ -90,11 +90,11 @@ def count_overlaps_exclusionsets(depth, numsegs, labels, link_worth):
     assert np.all(np.sort(keys) == np.arange(len(keys)))
 
     def exclusions():
-        for D in range(depth):
-            print "exl depth", D
+        for Z in range(numslices):
+            print "exl numslices", Z
             excls = set()
             for xslice, yslice in work_by_chunks(labels):
-                subimages = [labels[yslice, xslice, D, Seg][...].ravel() for Seg in range(numsegs)]
+                subimages = [labels[yslice, xslice, Seg, Z][...].ravel() for Seg in range(numsegs)]
                 excls.update(set(zip(*subimages)))
             # filter out zeros
             excls = set(tuple(i for i in s if i) for s in excls)
@@ -104,10 +104,10 @@ def count_overlaps_exclusionsets(depth, numsegs, labels, link_worth):
 
     def overlaps():
         overlap_areas = fast64counter.ValueCountInt64()
-        for D in range(depth - 1):
+        for Z in range(numslices - 1):
             for xslice, yslice in work_by_chunks(labels):
-                subimages_d1 = [labels[yslice, xslice, D, Seg][...].ravel() for Seg in range(numsegs)]
-                subimages_d2 = [labels[yslice, xslice, D+1, Seg][...].ravel() for Seg in range(numsegs)]
+                subimages_d1 = [labels[yslice, xslice, Seg, Z][...].ravel() for Seg in range(numsegs)]
+                subimages_d2 = [labels[yslice, xslice, Seg, Z + 1][...].ravel() for Seg in range(numsegs)]
                 for s1 in subimages_d1:
                     for s2 in subimages_d2:
                         overlap_areas.add_values_pair32(s1, s2)
