@@ -114,7 +114,8 @@ def build_model(areas, exclusions, links):
     return model, link_to_segs
 
 if __name__ == '__main__':
-    segmentations = h5py.File(sys.argv[1])['segmentations']
+    h5f = h5py.File(sys.argv[1])
+    segmentations = h5f['segmentations']
 
     ##################################################
     # compute all overlaps between multisegmentations
@@ -172,7 +173,7 @@ if __name__ == '__main__':
 
     areas, exclusions, links = overlaps.count_overlaps_exclusionsets(numslices, numsegs, labels, link_worth)
     num_segments = len(areas)
-    assert num_segments == cross_D_offset + 1  # areas includes an area for 0
+    assert num_segments == cross_Z_offset + 1  # areas includes an area for 0
 
     st = time.time()
     model, links_to_segs = build_model(areas, exclusions, links)
@@ -229,13 +230,19 @@ if __name__ == '__main__':
 
     # Condense results
     out_labels = lf.create_dataset('labels', [height, width, numslices], dtype=np.uint64,
-                                   chunks=tuple(chunking[0], chunking[1], chunking[3]), compression='gzip')
+                                   chunks=(chunking[0], chunking[1], chunking[3]), compression='gzip')
     for Z in range(numslices):
         for seg_idx in range(numsegs):
             if (out_labels[:, :, Z][...].astype(bool) * segment_map[labels[:, :, seg_idx, Z]].astype(bool)).sum() != 0:
                 badsegs = out_labels[:, :, Z][...].astype(bool) * segment_map[labels[:, :, seg_idx, Z]].astype(bool) != 0
                 print "BAZ", out_labels[:, :, Z][badsegs], segment_map[labels[:, :, seg_idx, Z]][badsegs]
             out_labels[:, :, Z] |= segment_map[labels[:, :, seg_idx, Z]]
+
+    # copy over probabilities
+    in_probs = h5f['probabilities']
+    out_probs = lf.create_dataset('probabilities', in_probs.shape, dtype=in_probs.dtype, chunks=in_probs.chunks, compression='gzip')
+    out_probs[...] = in_probs[...]
+    lf.close()
 
     # move to final location
     if os.path.exists(output_path):
