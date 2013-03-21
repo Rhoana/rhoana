@@ -5,6 +5,7 @@ import os
 
 import h5py
 import fast64counter
+import seeded_region_growing
 
 Debug = False
 
@@ -61,7 +62,7 @@ overlap1 = block1[block1_slice]
 overlap2 = block2[block2_slice]
 
 counter = fast64counter.ValueCountPair64()
-counter.add_values(overlap1.ravel(), overlap2.ravel())
+counter.add_values_pair(overlap1.ravel(), overlap2.ravel())
 overlap_labels1, overlap_labels2, overlap_areas = counter.get_counts()
 
 areacounter = fast64counter.ValueCountInt64()
@@ -73,15 +74,13 @@ to_merge = []
 for l1, l2, overlap_area in zip(overlap_labels1, overlap_labels2, overlap_areas):
     if l1 == 0 or l2 == 0:
         continue
-    if inverse[l1] == inverse[l2]:
-        continue
     if ((overlap_area > auto_join_pixels) or
         ((overlap_area > minoverlap_pixels) and
          ((overlap_area > minoverlap_single_ratio * areas[l1]) or
           (overlap_area > minoverlap_single_ratio * areas[l2]) or
           ((overlap_area > minoverlap_dual_ratio * areas[l1]) and
            (overlap_area > minoverlap_dual_ratio * areas[l2]))))):
-        to_merge.append((inverse[l1], inverse[l2]))
+        to_merge.append((l1, l2))
 # Merges are handled later
 
 # After merging, we extract half of the overlap, remove all but its outer
