@@ -23,9 +23,14 @@ int main(int argc, char** argv)
         double minv, maxv;
         minMaxLoc(im, &minv, &maxv);
         cout << feature_names[i] << " " << minv << " " << maxv << endl;
-        normalize(im, im, 0, 1, NORM_MINMAX);
+        
         minMaxLoc(im, &minv, &maxv);
         cout << "    " << minv << " " << maxv << endl;
+        normalize(im, im, 0, 1, NORM_MINMAX);
+        if (feature_names[i].find("anisotropy") !=  string::npos) {
+            im.convertTo(im, CV_8UC1);
+            equalizeHist(im, im);
+        }
         
         imshow(feature_names[i], im);
     }
