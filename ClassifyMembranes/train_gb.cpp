@@ -1,6 +1,7 @@
 #include <opencv/cv.h>
 #include <opencv/highgui.h>
 #include <opencv/ml.h>
+#include <stdint.h>
 #include <H5Cpp.h>
 #include <assert.h>
 #include <fstream>
