@@ -184,9 +184,9 @@ int main(int argc, char** argv) {
   assert (weak_learners.empty());
 
   /* adjust features from logistic to probability */
-  prediction = -prediction;
-  exp(prediction, prediction);
-  prediction = 1.0 / (1.0 + prediction);
+  float *p = prediction.ptr<float>(0);
+  for (int i = 0; i < prediction.total(); i++)
+      p[i] = 1.0 / (1.0 + exp(- (p[i])));
 
   /* write out prediction */
   write_feature(h5f, prediction, "probabilities");
