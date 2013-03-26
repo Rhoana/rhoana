@@ -2,6 +2,7 @@ import sys
 from collections import defaultdict
 import numpy as np
 import os
+import mahotas
 
 import h5py
 import fast64counter
@@ -81,19 +82,34 @@ for l1, l2, overlap_area in zip(overlap_labels1, overlap_labels2, overlap_areas)
           ((overlap_area > minoverlap_dual_ratio * areas[l1]) and
            (overlap_area > minoverlap_dual_ratio * areas[l2]))))):
         to_merge.append((l1, l2))
-# Merges are handled later
 
-# After merging, we extract half of the overlap, remove all but its outer
-# boundary, and run watershed on the probability map to fill in the interior.
+remapped_block2 = block2[...]
+num_remapped_pixels = 0
+for l1, l2 in to_merge:
+    num_remapped_pixels += (remapped_block2 == l2).sum()
+    remapped_block2[remapped_block2 == l2] = l1
+overlap2 = remapped_block2[block2_slice]
+print "remapped", num_remapped_pixels, "out of", remapped_block2.size
+
+# After merging, we extract half of the overlap, remove all but the boundary in
+# the overlap direction, and run watershed on the probability map to fill in
+# the interior.
 probabilities = probs1[block1_slice]
 assert np.all(probabilities == probs2[block2_slice])
 hi_block1[direction] = - halo_size
 lo_block2[direction] = halo_size;
 border_block1_slice = tuple(slice(l, h) for l, h in zip(lo_block1, hi_block1))
 border_block2_slice = tuple(slice(l, h) for l, h in zip(lo_block2, hi_block2))
-border_only = np.concatenate((block1[border_block1_slice], block2[border_block2_slice]), direction)
-border_only[1:-1, 1:-1, 1:-1] = 0
+border_only = np.concatenate((block1[border_block1_slice], remapped_block2[border_block2_slice]), direction)
+if direction == 0:
+    border_only[1:-1, :, :] = 0
+elif direction == 1:
+    border_only[:, 1:-1, :] = 0
+else:
+    border_only[:, :, 1:-1] = 0
 probabilities = (probabilities * 255).astype(np.uint8)
+for z in range(probabilities.shape[2]):
+    probabilities[:, :, z] = mahotas.gaussian_filter(probabilities[:, :, z], 1)
 seeded_region_growing.inplace_region_growing(probabilities, border_only)
 
 # Remap and merge
@@ -102,15 +118,15 @@ out2 = h5py.File(outblock2_path + '_partial', 'w')
 outblock1 = out1.create_dataset('/labels', block1.shape, block1.dtype, chunks=block1.chunks)
 outblock2 = out2.create_dataset('/labels', block2.shape, block2.dtype, chunks=block2.chunks)
 outblock1[...] = block1[...]
-outblock2[...] = block2[...]
+outblock2[...] = remapped_block2
 
 # write the grown regions back into the blocks
 outblock1[block1_slice] = border_only
 outblock2[block2_slice] = border_only
 
 # copy the probabilities forward
-outprobs1 = out1.create_dataset('/probabilities', block1.shape, probs1.dtype, chunks=probs1.dtype)
-outprobs2 = out2.create_dataset('/probabilities', block2.shape, probs2.dtype, chunks=probs2.dtype)
+outprobs1 = out1.create_dataset('/probabilities', block1.shape, probs1.dtype, chunks=probs1.chunks)
+outprobs2 = out2.create_dataset('/probabilities', block2.shape, probs2.dtype, chunks=probs2.chunks)
 outprobs1[...] = probs1[...]
 outprobs2[...] = probs2[...]
 
