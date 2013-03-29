@@ -3,5 +3,5 @@ set -e
 
 echo "Remap block" $*
 
-RLDIR=${CONNECTOME}/Pipeline/Relabeling
+RLDIR=${CONNECTOME}/Relabeling
 ${VIRTUAL_ENV}/bin/python "${RLDIR}/remap_block.py" $*

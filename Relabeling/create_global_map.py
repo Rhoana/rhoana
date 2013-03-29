@@ -14,10 +14,15 @@ if __name__ == '__main__':
 
     # put every pair in the remap
     for v1, v2 in merges:
-        # assign higher label to lower label
-        dest = min(remap.get(v1, v1), remap.get(v2, v2))
-        remap[v1] = dest
-        remap[v2] = dest
+        remap.setdefault(v1, v1)
+        remap.setdefault(v2, v2)
+        while v1 != remap[v1]:
+            v1 = remap[v1]
+        while v2 != remap[v2]:
+            v2 = remap[v2]
+        if v1 > v2:
+            v1, v2 = v2, v1
+        remap[v2] = v1
 
     # pack values - every value now either maps to itself (and should get its
     # own label), or it maps to some lower value (which will have already been

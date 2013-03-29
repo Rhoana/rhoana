@@ -16,9 +16,14 @@ if __name__ == '__main__':
         xbase = int(args.pop(0))
         ybase = int(args.pop(0))
         infile = args.pop(0)
-        # Matlab order
-        data = h5py.File(infile)['labels'][zoffset, :, :]
-        sz = data.shape[-1]
-        output_image[ybase:ybase+sz, xbase:xbase+sz] = data
+        try:
+            data = h5py.File(infile, 'r')['labels'][:, :, :]
+        except Exception, e:
+            print e, infile
+            raise
+        sz = data.shape[0]
+        output_image[xbase:xbase+sz, ybase:ybase+sz] = data[:, :, zoffset]
     tif = TIFF.open(output_path, mode='w')
     tif.write_image(output_image, compression='lzw')
+    
+    

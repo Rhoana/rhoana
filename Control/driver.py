@@ -32,7 +32,7 @@ class Job(object):
                                "-r",
                                "-R", "rusage[mem=16000]" if "FusedBlock" in self.name else "rusage[mem=16000]",
                                "-g", "/diced_connectome",
-                               "-q", FUSED_QUEUE if "FusedBlock" in self.name else "normal_serial" ,
+                               "-q", FUSED_QUEUE if "FusedBlock" in self.name else "short_serial" ,
                                "-J", self.name,
                                "-o", "logs/out." + self.name,
                                "-e", "logs/error." + self.name,
@@ -54,10 +54,14 @@ class JobSplit(object):
         self.idx = idx
         self.name = job.name
 
-    @property
-    def already_done(self):
+    def get_done(self):
         return self.job.already_done
 
+    def set_done(self, val):
+        self.job.already_done = val
+
+    already_done = property(get_done, set_done)
+    
     @property
     def output(self):
         return self.job.output[self.idx]
@@ -245,7 +249,7 @@ class ExtractLabelPlane(Job):
             yield block.output
 
     def command(self):
-        return ['./extract_label_plane.sh', self.output, str(self.image_size), str(self.zoffset)] + \
+        return [os.path.join(os.environ['CONNECTOME'], 'Control', 'extract_label_plane.sh'), self.output, str(self.image_size), str(self.zoffset)] + \
             list(self.generate_args())
 
 
@@ -315,8 +319,6 @@ if __name__ == '__main__':
     # Window fuse all blocks
     fused_blocks = dict((idxs, FusedBlock(block, idxs, num)) for num, (idxs, block) in enumerate(blocks.iteritems()))
 
-    Job.run_all()
-    asdf
 
     # Pairwise match all blocks.
     #

@@ -3,5 +3,5 @@ set -e
 
 echo "Join Concatenation" $*
 
-RLDIR=${CONNECTOME}/Pipeline/Relabeling
+RLDIR=${CONNECTOME}/Relabeling
 ${VIRTUAL_ENV}/bin/python "${RLDIR}/concatenate_joins.py" $*

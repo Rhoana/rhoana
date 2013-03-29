@@ -154,7 +154,7 @@ if __name__ == '__main__':
     for Z in range(numslices):
         this_slice_offset = 0
         for seg_idx in range(numsegs):
-            temp, numregions = ndimage_label(segmentations[:, :, seg_idx, Z][...], output=np.int32)
+            temp, numregions = ndimage_label(1 - segmentations[:, :, seg_idx, Z][...], output=np.int32)
             labels[:, :, seg_idx, Z] = temp
             offset_labels(Z, seg_idx, labels, this_slice_offset)
             this_slice_offset += numregions
