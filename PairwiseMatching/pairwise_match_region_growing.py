@@ -100,7 +100,7 @@ hi_block1[direction] = - halo_size
 lo_block2[direction] = halo_size;
 border_block1_slice = tuple(slice(l, h) for l, h in zip(lo_block1, hi_block1))
 border_block2_slice = tuple(slice(l, h) for l, h in zip(lo_block2, hi_block2))
-border_only = np.concatenate((block1[border_block1_slice], remapped_block2[border_block2_slice]), direction)
+border_only = np.concatenate((block1[border_block1_slice], remapped_block2[border_block2_slice]), direction).copy(order='C')
 if direction == 0:
     border_only[1:-1, :, :] = 0
 elif direction == 1:
