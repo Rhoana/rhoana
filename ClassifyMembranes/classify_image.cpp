@@ -128,7 +128,7 @@ int main(int argc, char** argv) {
     }
   }
   
-  assert (argc - optind == 3);  /* 2 required arguments */
+  assert (argc - optind == 3);  /* 3 required arguments */
   char *input_image = argv[optind];
   char *classifier_file = argv[optind + 1];
   char *output_hdf5 = argv[optind + 2];
