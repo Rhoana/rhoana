@@ -35,7 +35,7 @@ predict_gb: opencv_hdf5.o $(BLOSC_O) predict_gb.o
 test_image_to_hdf5: opencv_hdf5.o $(BLOSC_O) test_image_to_hdf5.o 
 	g++ -o $@ $^ $(LDFLAGS)
 
-sketch_on_image: sketch_on_image.o
+sketch_on_image: opencv_hdf5.o $(BLOSC_O) sketch_on_image.o
 	g++ -o $@ $^ $(LDFLAGS)
 
 classify_image: opencv_hdf5.o $(BLOSC_O) classify_image.o membranes.o adapthisteq.o local_statistics.o tensor_gradient.o drawhist.o vesicles.o
