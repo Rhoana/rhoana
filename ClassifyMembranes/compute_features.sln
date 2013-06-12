@@ -1,0 +1,31 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 11.00
+# Visual Studio 2010
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "compute_features", "compute_features.vcxproj", "{2450A031-BBB9-4929-ACA4-BE5FEF10572C}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Solution Items", "Solution Items", "{68CAE72C-62E4-416B-9DB4-F2B6E8784C94}"
+	ProjectSection(SolutionItems) = preProject
+		opencv_hdf5.cpp = opencv_hdf5.cpp
+	EndProjectSection
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Win32 = Debug|Win32
+		Debug|x64 = Debug|x64
+		Release|Win32 = Release|Win32
+		Release|x64 = Release|x64
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{2450A031-BBB9-4929-ACA4-BE5FEF10572C}.Debug|Win32.ActiveCfg = Debug|Win32
+		{2450A031-BBB9-4929-ACA4-BE5FEF10572C}.Debug|Win32.Build.0 = Debug|Win32
+		{2450A031-BBB9-4929-ACA4-BE5FEF10572C}.Debug|x64.ActiveCfg = Debug|x64
+		{2450A031-BBB9-4929-ACA4-BE5FEF10572C}.Debug|x64.Build.0 = Debug|x64
+		{2450A031-BBB9-4929-ACA4-BE5FEF10572C}.Release|Win32.ActiveCfg = Release|Win32
+		{2450A031-BBB9-4929-ACA4-BE5FEF10572C}.Release|Win32.Build.0 = Release|Win32
+		{2450A031-BBB9-4929-ACA4-BE5FEF10572C}.Release|x64.ActiveCfg = Release|x64
+		{2450A031-BBB9-4929-ACA4-BE5FEF10572C}.Release|x64.Build.0 = Release|x64
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+EndGlobal

@@ -467,10 +467,10 @@ extern "C" __global__ void trainKernel(
 # input_features_suffix = '_rhoanafeatures.hdf5'
 # output_path = 'D:\\dev\\Rhoana\\classifierTraining\\membraneDetectionECSx4ds2\\rhoana_forest.hdf5'
 
-input_image_folder = 'D:\\dev\\Rhoana\\classifierTraining\\Miketraining\\training\\'
-input_image_suffix = '_labeled.png'
+input_image_folder = 'D:\\dev\\Rhoana\\classifierTraining\\Miketraining\\training2\\'
+input_image_suffix = '_labeled_update.tif'
 input_features_suffix = '.hdf5'
-output_path = 'D:\\dev\\Rhoana\\classifierTraining\\Miketraining\\rhoana_forest_3class.hdf5'
+output_path = 'D:\\dev\\Rhoana\\classifierTraining\\Miketraining\\training2\\rhoana_forest_3class.hdf5'
 
 
 # Prep the gpu function

@@ -27,7 +27,9 @@ static inline float _quickselect(float *p, int count, int desired_pos)
 
 static inline float quickmedian(const float *p, int count)
 {
-    float temp[count];
+    float *temp = new float[count];
     memcpy((void *) temp, (const void *) p, count * sizeof(float));
-    return _quickselect(temp, count, count/2);
+	float result = _quickselect(temp, count, count/2);
+	delete[] temp;
+	return result;
 }

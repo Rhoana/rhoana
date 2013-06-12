@@ -63,11 +63,11 @@ __global__ void predictKernel(const float *x, int n, int mdim, const int *treema
 }
 """
 
-forest_file = 'D:\\dev\\Rhoana\\classifierTraining\\Miketraining\\rhoana_forest_3class.hdf5'
+forest_file = 'D:\\dev\\Rhoana\\classifierTraining\\Miketraining\\training2\\rhoana_forest_3class.hdf5'
 input_image_folder = 'D:\\dev\\Rhoana\\classifierTraining\\Miketraining\\all'
 input_image_suffix = '_labeled.png'
 input_features_suffix = '.hdf5'
-output_folder = 'D:\\dev\\Rhoana\\classifierTraining\\Miketraining\\output\\'
+output_folder = 'D:\\dev\\Rhoana\\classifierTraining\\Miketraining\\output2\\'
 
 # Load the forest settings
 
@@ -131,11 +131,11 @@ for file in files:
 
 	output_image_basename = file.replace(input_image_folder, output_folder)
 
-	for classi in range(nclass):
-		output_image_file = output_image_basename.replace(input_image_suffix, '_class{0}.png'.format(classi + 1))
-		mahotas.imsave(output_image_file, np.uint8(prob_image[:,:,classi] * 255))
+	# for classi in range(nclass):
+	# 	output_image_file = output_image_basename.replace(input_image_suffix, '_class{0}.png'.format(classi + 1))
+	# 	mahotas.imsave(output_image_file, np.uint8(prob_image[:,:,classi] * 255))
 
-	output_image_file = output_image_basename.replace(input_image_suffix, '_allclass.png'.format(classi + 1))
+	output_image_file = output_image_basename.replace(input_image_suffix, '_allclass.png')
 	mahotas.imsave(output_image_file, np.uint8(prob_image * 255))
 
 	win_0 = np.logical_and(prob_image[:,:,0] > prob_image[:,:,1], prob_image[:,:,0] > prob_image[:,:,2])
@@ -147,7 +147,7 @@ for file in files:
 	win_image[:,:,1] = win_1 * 255
 	win_image[:,:,2] = win_2 * 255
 
-	output_image_file = output_image_basename.replace(input_image_suffix, '_winclass.png'.format(classi + 1))
+	output_image_file = output_image_basename.replace(input_image_suffix, '_winclass.png')
 	mahotas.imsave(output_image_file, np.uint8(win_image))
 
 	output_path = output_image_basename.replace(input_image_suffix, '_probabilities.hdf5');

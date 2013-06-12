@@ -3,10 +3,15 @@
 #include <opencv/highgui.h>
 #include <H5Cpp.h>
 #include <iostream>
-#include <getopt.h>
 #include <assert.h>
 using namespace cv;
 using namespace std;
+
+#ifdef WIN32
+#include "XGetopt.h"
+#else
+#include <getopt.h>
+#endif
 
 H5::H5File create_feature_file(char *filename, const Mat &image);
 void write_feature(H5::H5File h5file, const Mat &image, const char *name);
@@ -26,16 +31,16 @@ void add_feature(const Mat &image, const char *name)
 
 static int verbose;
 
-/* The options we understand. */
-static struct option long_options[] = {
-  /* These options set a flag. */
-  {"verbose", no_argument, &verbose, 1},
-  /* These options don't set a flag.
-   We distinguish them by their indices. */
-  {"windowsize",  required_argument, 0, 'w'},
-  {"membranewidth",  required_argument, 0, 'm'},
-  {0, 0, 0, 0}
-};
+///* The options we understand. */
+//static struct option long_options[] = {
+//  /* These options set a flag. */
+//  {"verbose", no_argument, &verbose, 1},
+//  /* These options don't set a flag.
+//   We distinguish them by their indices. */
+//  {"windowsize",  required_argument, 0, 'w'},
+//  {"membranewidth",  required_argument, 0, 'm'},
+//  {0, 0, 0, 0}
+//};
 
 int main(int argc, char** argv) {
   /* Default values. */
@@ -44,17 +49,14 @@ int main(int argc, char** argv) {
   
   while (1) {
     int option_index = 0;
-    int c = getopt_long (argc, argv, "w:m:", long_options, &option_index);
-    
+
+    //int c = getopt_long (argc, argv, "w:m:", long_options, &option_index);
+    int c = getopt(argc, argv, _T("w:m:"));
+
     /* Detect the end of the options. */
     if (c == -1)
       break;
     switch (c) {
-      case 0:
-        /* If this option set a flag, do nothing else now. */
-        if (long_options[option_index].flag != 0)
-          break;
-        break;
         
       case 'w':
         windowsize = atoi(optarg);
@@ -74,7 +76,7 @@ int main(int argc, char** argv) {
         abort ();
     }
   }
-  
+
   assert (argc - optind == 2);  /* 2 required arguments */
   char *input_image = argv[optind];
   char *output_hdf5 = argv[optind + 1];
