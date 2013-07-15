@@ -7,8 +7,6 @@
 
 import h5py
 import numpy as np
-import math
-import time
 import sys
 sys.path.append(r'c:\Python27\Lib\site-packages')
 import pickle
@@ -17,22 +15,29 @@ from OpenGL.GLU import *
 from OpenGL.GL import *
 import arcball as arc
 
+import matplotlib.pyplot as plt
+
 import cv2
 
 class Viewer:
     def __init__(self, label_file, chunk_file):
-        self.arcball = self.create_arcball()
+        self.arcball = None
         self.label_file = h5py.File(label_file, 'r')
 
-        self.ds = self.label_file["labels"]
+        self.ds = self.label_file["main"]
 
         self.rows = self.ds.shape[0]
         self.columns = self.ds.shape[1]
         self.layers = self.ds.shape[2]
         
-        self.chunk_rows = self.ds.chunks[0]
+        
+        '''self.chunk_rows = self.ds.chunks[0]
         self.chunk_columns = self.ds.chunks[1]
-        self.chunk_layers = self.ds.chunks[2]
+        self.chunk_layers = self.ds.chunks[2]'''
+        
+        self.chunk_rows = 64
+        self.chunk_columns = 64
+        self.chunk_layers = 16
         
         self.chunk_map = self.read_chunk_map(chunk_file)
         
@@ -40,39 +45,35 @@ class Viewer:
         self.rotation_x = 0
         self.rotation_y = 0
         
+        self.win_h = 0
+        self.win_w = 0
+        
         self.contours = []
         
-        self.rotate = False
-        self.rotation_mat = None
-        self.rotation_list = []
+        self.left = None
+        self.slice = None
+        self.pick_location = (0,0,0)
         
-        self.fog_mode = [GL_EXP, GL_EXP2, GL_LINEAR]
-        self.fogidx = 0
+        self.picking_file = open(r"C:\Users\DanielMiron\Documents\3d_rendering\picking.txt", "w")
         
     def create_arcball(self):
         arcball = arc.Arcball()
-        arcball.place([500,500], 500)
-        #arcball.setaxes([1,1,0], [-1,1,0])
+        #locate the arcball center at center of window with radius half the width
+        arcball.place([self.win_w/2, self.win_h/2], self.win_w/2)
         return arcball
         
-    def scale(self):
-        for cnt in self.contours:
-            for vtx in cnt:
-                #scale by 1.8 to go from -.9 to .9 with .1 buffer room on each side
-                vtx[0] = 1.8*(float(vtx[0])/float(self.columns)-0.5)
-                vtx[1] = -1.8*(float(vtx[1])/float(self.rows)-0.5) #-1.8 flips about x to correspond to hdf5 orientation
-                vtx[2] = -1.8*(float(vtx[2])/float(self.layers)-0.5)
-                
-                temp = vtx[0]
-                vtx[0] = -1*vtx[1]
-                vtx[1] = -1*temp
-        return
-        
     def make_display_list(self):
+        '''Creates a display list to draw a box and the data scaled to .9*the size of the window'''
         
         self.display_list = glGenLists(1)
-        glNewList(self.display_list, GL_COMPILE) 
+        glNewList(self.display_list, GL_COMPILE)
         
+        glMatrixMode(GL_MODELVIEW)
+        glPushMatrix()
+        glTranslatef(-.9, .9, .9)
+        glScalef(1.8/self.columns, -1.8/self.rows, -1.8/self.layers)
+        
+        #draw the layers
         for cnt in self.contours:
             gluTessBeginPolygon(self.tesselator, None)
             gluTessBeginContour(self.tesselator)
@@ -80,15 +81,6 @@ class Viewer:
                 gluTessVertex(self.tesselator, vtx, vtx)
             gluTessEndContour(self.tesselator)
             gluTessEndPolygon(self.tesselator)
-            
-        
-        '''for cnt in self.contours:
-            #glBegin(GL_LINE_LOOP)
-            glBegin(GL_POLYGON)
-            for vtx in cnt:
-                glColor3f(*vtx)
-                glVertex3f(*vtx)
-            glEnd()'''
             
         #make a box around the image
         self.axes()
@@ -107,8 +99,7 @@ class Viewer:
             glVertex3f(line[1][0], line[1][1], line[1][2])
         glEnd()  
         
-        
-        #make a back for easy orientation
+        #make a back panel for easy orientation
         glColor3f(.5, .5, .5)
         glBegin(GL_POLYGON)
         glVertex3f(*self.x_axis[2][0])
@@ -117,70 +108,110 @@ class Viewer:
         glVertex3f(*self.x_axis[3][0])
         glEnd()
         
+        glPopMatrix()
+        
         glEndList()
         
     def vertex_callback(self, vertex):
-        glColor3f(*vertex)
+        '''sets the color of a single vertex and draws it'''
+        #scale by dim-1 to include black 
+        #multiply by -1 and add 1 to invert color axis
+        glColor3f(1.0*vertex[0]/(self.columns-1), -1.0*vertex[1]/(self.rows-1)+1.0, -1.0*vertex[2]/(self.layers-1)+1.0)
         glVertex3f(*vertex)
         
     def draw(self):
+        '''draws an image'''
         
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)
         glLoadIdentity()
-        
-        #if self.rotate:
-        #    glMultMatrixd(self.rotation_mat)
         gluLookAt(0, 0, 3, 0, 0, 2, 0,1,0)
         glMultMatrixd(self.arcball.matrix().T)
-        '''storing the matrices and multiplying them in the order from most recent first, to oldest last
-        seems to fix the composition problem. rotation about z-axis is still backwards'''
-
-        '''if self.rotate:
-            #glMultMatrixd(self.rotation_mat) 
-            #for mat in self.rotation_list:
-            #for mat in reversed(self.rotation_list):
-            #    glMultMatrixd(mat)
-            glMultMatrixd(self.rotation_mat)'''
-
+        
+        self.draw_marker()
+    
         glCallList(self.display_list)
         glutSwapBuffers()
         return
         
+    def draw_marker(self):
+        glMatrixMode(GL_MODELVIEW)
+        glPushMatrix()
+        location = self.pick_location
+        glTranslatef(float(1.8*location[0])/self.columns-.9,
+                    -(float(1.8*location[1])/self.rows-.9),
+                    -(float(1.8*location[2])/self.layers-.9))
+        glScalef(1.8/self.layers, 1.8/self.layers, 1.8/self.layers)
+        location = self.pick_location
+        glColor3f(1-(1.0*location[0]/(self.columns-1)),
+            1-(-1.0*location[1]/(self.rows-1)+1.0), 
+            1-(-1.0*location[2]/(self.layers-1)+1.0))
+        glutSolidSphere(10, 50, 50)
+        
+        glPopMatrix()
+        
     def keyboard(self, key, x, y):
-        if key == chr(102):
-            if self.fogidx ==2:
-                self.fogidx =0
-            else:
-                self.fogidx +=1
-            glFogi(GL_FOG_MODE, self.fog_mode[self.fogidx])
+        return
         
     def on_click(self, button, state, x, y):
+        #Left click for arcball rotation
         if (button == GLUT_LEFT_BUTTON and state == GLUT_DOWN):
+            self.left = True #turn on dragging rotation
             self.arcball.down((x,y))
-        #self.rotation_mat = self.arcball.matrix().T
-        #self.draw()
+        #right click to select a pixel location
+        elif (button == GLUT_RIGHT_BUTTON and state == GLUT_DOWN):
+            self.left = False #turn off dragging rotation
+            self.pick_location = self.pick(x,y)
+            self.has_marker = True
+            self.slice = self.show_slice(self.pick_location).astype(np.uint8)
+        
+        
+    def show_slice(self, location):
+        '''displays a single selected z slice in 2-d'''
+        full_layer = self.ds[:, :, location[2]][...]
+        layer =np.zeros(np.shape(full_layer))
+        max_key = 0 #used to scale colors to 256 colors
+        for key in self.keys:
+            if key > max_key:
+                max_key = key
+            layer[full_layer == key] = key
+        layer = 255*layer/key
+        plt.imshow(layer)
+        return layer
+        
+    def draw_slice(self):
+        '''draws a single z slice'''
+        if self.slice != None:
+            width = float(np.shape(self.slice)[1])
+            height = float(np.shape(self.slice)[0])
+            glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)
+            #scale window to size of slice
+            glPixelZoom(self.win_w/width, self.win_h/height)
+            glDrawPixels(width, height, GL_LUMINANCE, GL_UNSIGNED_BYTE, self.slice)
+            glutSwapBuffers()
     
+    def pick(self, x,y):
+        '''gets the (x,y,z) location in the full volume of a chosen pixel'''
+        click_color = None
+        click_color = glReadPixels(x,self.win_h-y, 1,1, GL_RGB, GL_FLOAT)[0][0]
+        location  = [int(click_color[0]*(self.columns-1)), 
+                    int(-(click_color[1]-1)*(self.rows-1)), int(-(click_color[2]-1)*((self.layers-1)))]
+        return location
+        
     def on_drag(self, x, y):
-        self.arcball.drag((x,y))
-        self.draw()
+        if self.left:
+            self.arcball.drag((x,y))
+            self.draw()
     
-    def main(self, density, color, contour_file):
+    def main(self, window_height, window_width, keys, contour_file):
+        self.keys = keys
         self.contours = self.load_contours(contour_file)
-        self.st = time.time()  
+        self.win_h = window_height
+        self.win_w = window_width
+        self.arcball = self.create_arcball()
         glutInit(sys.argv)
         glutInitDisplayMode(GLUT_RGBA | GLUT_DOUBLE | GLUT_DEPTH)
-        glutInitWindowSize(1000, 1000) #width, height
+        glutInitWindowSize(self.win_w, self.win_h) #width, height
         glutCreateWindow("Nerve Cord")
-        
-        #initialize fog parameters
-        glEnable(GL_DEPTH_TEST)
-        #glEnable(GL_FOG)
-        glFogi(GL_FOG_MODE, GL_LINEAR)
-        glFogfv(GL_FOG_COLOR,color)
-        glFogf(GL_FOG_DENSITY, density)
-        glHint(GL_FOG_HINT, GL_NICEST)
-        #glFogf(GL_FOG_START, 10.0)
-        #glFogf(GL_FOG_END, 40.0)
         
         glMatrixMode(GL_PROJECTION)
         glLoadIdentity()
@@ -192,17 +223,25 @@ class Viewer:
         gluTessCallback(self.tesselator, GLU_TESS_END, glEnd)
         gluTessCallback(self.tesselator, GLU_TESS_VERTEX, self.vertex_callback) 
         
+        glEnable(GL_DEPTH_TEST)
+        
         self.make_display_list()
         glutDisplayFunc(self.draw)
         glutKeyboardFunc(self.keyboard)
         glutMouseFunc(self.on_click)
         glutMotionFunc(self.on_drag)
+        
+        glutCreateWindow("single layer")
+        glutDisplayFunc(self.draw_slice)
+        
+        
         glutMainLoop()
         return
         
         
     def get_contours(self, keys, contour_file):
         chunk_list = self.organize_chunks(keys)
+        self.keys = keys
         for chunk in chunk_list:
             for layer in reversed(range(self.chunk_layers)):
                 for key in keys:
@@ -219,10 +258,9 @@ class Viewer:
                             for cnt in contours:
                                 cnt_3d = []
                                 for vtx in cnt:
-                                    cnt_3d += [[vtx[0][1]-1+chunk[0],vtx[0][0]-1+chunk[1], layer+chunk[2]]] #subtract 1 to adjust back after buffer
+                                    cnt_3d += [[vtx[0][0]-1+chunk[1],vtx[0][1]-1+chunk[0], layer+chunk[2]]] #subtract 1 to adjust back after buffer
                                 contours_3d += [cnt_3d]
                             self.contours +=contours_3d
-        #self.scale()
         self.save_contours(contour_file)
         
         
@@ -252,15 +290,16 @@ class Viewer:
         self.z_axis = [[[0,0,0], [0,0,self.layers]], [[self.columns,0,0],[self.columns, 0, self.layers]],
                         [[0, self.rows,0], [0, self.rows, self.layers]],[[self.columns, self.rows, 0],[self.columns, self.rows, self.layers]]]
         
-        for lines in [self.x_axis, self.y_axis, self.z_axis]:
+        '''for lines in [self.x_axis, self.y_axis, self.z_axis]:
             for line in lines:
                 for vtx in line:
                     vtx[0] = 1.8*(float(vtx[0])/float(self.columns)-0.5)
                     vtx[1] = -1.8*(float(vtx[1])/float(self.rows)-0.5)
-                    vtx[2] = -1.8*(float(vtx[2])/float(self.layers)-0.5)
+                    vtx[2] = -1.8*(float(vtx[2])/float(self.layers)-0.5)'''
     
         
         
 
-viewer = Viewer(r'C:\Users\DanielMiron\Documents\3d_rendering\labels.hdf5',
-                r'C:\Users\DanielMiron\Documents\3d_rendering\label_chunk_map.p')
+viewer = Viewer(r'C:\Users\DanielMiron\Documents\3d_rendering\labels_full.h5',
+                r'C:\Users\DanielMiron\Documents\3d_rendering\label_full_chunk_map.p')
+viewer.main(1000,1000, [6642,4627], r'C:\Users\DanielMiron\Documents\3d_rendering\contours_full.p')
