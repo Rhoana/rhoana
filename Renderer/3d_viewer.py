@@ -3,58 +3,180 @@
 #Daniel Miron
 #7/5/2013
 #
+#Allows 3d viewing of nerve cord or neuron stacks.
+#Includes ability to fully rotate image in 3 dimensions and to mark locations in 3-space
 #-------------------------
 
 import h5py
 import numpy as np
+import glob
+import os
 import sys
 sys.path.append(r'c:\Python27\Lib\site-packages')
 import pickle
+import math
 from OpenGL.GLUT import *
 from OpenGL.GLU import *
 from OpenGL.GL import *
 import arcball as arc
 
-import matplotlib.pyplot as plt
+from pysqlite2 import dbapi2 as sqlite
 
 import cv2
 
 class Viewer:
-    def __init__(self, label_file, chunk_file):
+    def __init__(self, directory, label_ids, resolution_level, location):
         self.arcball = None
-        self.label_file = h5py.File(label_file, 'r')
-
-        self.ds = self.label_file["main"]
-
-        self.rows = self.ds.shape[0]
-        self.columns = self.ds.shape[1]
-        self.layers = self.ds.shape[2]
+        self.directory = directory
+        self.w = resolution_level
+        self.w_str = "w={0:08}".format(resolution_level)
+        self.label_folder = self.directory +"\\ids\\tiles\\" + self.w_str
         
+        self.segment_file = self.directory + "\\ids\\segmentInfo.db"
         
-        '''self.chunk_rows = self.ds.chunks[0]
-        self.chunk_columns = self.ds.chunks[1]
-        self.chunk_layers = self.ds.chunks[2]'''
+        self.z_folders = glob.glob(self.label_folder + "\\*")
+        h5_file = h5py.File(glob.glob(self.z_folders[0] + "\\*")[0], "r")
+        self.label_key = h5_file.keys()[0]
+        self.shape = np.shape(h5_file[self.label_key][...])
         
-        self.chunk_rows = 64
-        self.chunk_columns = 64
-        self.chunk_layers = 16
+        self.tile_rows = self.shape[0]
+        self.tile_columns = self.shape[1]
         
-        self.chunk_map = self.read_chunk_map(chunk_file)
+        self.tiles_per_layer = len(glob.glob(self.z_folders[0] + "\\*"))
         
-        self.keys = 0
-        self.rotation_x = 0
-        self.rotation_y = 0
+        #taking sqrt assumes same number of tiles in x direction as y direction
+        self.rows = self.shape[0]*math.sqrt(self.tiles_per_layer)
+        self.columns = self.shape[1]*math.sqrt(self.tiles_per_layer)
+        self.layers = len(self.z_folders)
+        
+        #need to figure out way to get num_tiles in each direction when not square
+        '''self.rows = self.shape[0]*num_tiles_x
+        self.columns =self.shape[1]*num_tiles_y'''
+        
+        self.label_ids = label_ids
+        self.contours = self.find_contours(label_ids, range(self.layers))
         
         self.win_h = 0
         self.win_w = 0
         
-        self.contours = []
-        
         self.left = None
         self.slice = None
-        self.pick_location = (0,0,0)
+        self.pick_location = location
+        self.main()
         
-        self.picking_file = open(r"C:\Users\DanielMiron\Documents\3d_rendering\picking.txt", "w")
+    def main(self):
+        #self.contours = self.load_contours(contour_file)
+        #set window height and width
+        self.win_h = 1000
+        self.win_w = 1000
+        self.arcball = self.create_arcball()
+        glutInit(sys.argv)
+        glutInitDisplayMode(GLUT_RGBA | GLUT_DOUBLE | GLUT_DEPTH)
+        glutInitWindowSize(self.win_w, self.win_h) #width, height
+        glutCreateWindow("Nerve Cord")
+        
+        glMatrixMode(GL_PROJECTION)
+        glLoadIdentity()
+        gluPerspective(65, 1, 1, 10)
+        glMatrixMode(GL_MODELVIEW)
+        
+        self.tesselator = gluNewTess()
+        gluTessCallback(self.tesselator, GLU_TESS_BEGIN, glBegin)
+        gluTessCallback(self.tesselator, GLU_TESS_END, glEnd)
+        gluTessCallback(self.tesselator, GLU_TESS_VERTEX, self.vertex_callback) 
+        
+        glEnable(GL_DEPTH_TEST)
+        
+        self.make_display_list()
+        glutDisplayFunc(self.draw)
+        glutKeyboardFunc(self.keyboard)
+        glutMouseFunc(self.on_click)
+        glutMotionFunc(self.on_drag)
+        
+        #window for viewing z slices
+        glutCreateWindow("single layer")
+        glutDisplayFunc(self.draw_slice)
+        
+        
+        glutMainLoop()
+        return
+        
+    def get_contours(self, keys):
+        chunk_list = self.organize_chunks(keys)
+        for chunk in chunk_list:
+            for layer in reversed(range(self.chunk_layers)):
+                for key in keys:
+                    if not layer+chunk[2]>= self.layers: #make sure we stay within bounds
+                        labels = self.ds[chunk[0]:chunk[0]+self.chunk_rows, chunk[1]:chunk[1]+self.chunk_columns, chunk[2]+layer][...]
+                        labels[labels!=key] = 0
+                        labels[labels==key] = 255
+                        labels = labels.astype(np.uint8)
+                        buffer_array = np.zeros((np.shape(labels)[0]+2, np.shape(labels)[1]+2), np.uint8) #buffer by one pixel on each side
+                        buffer_array[1:-1, 1:-1] = labels 
+                        contours, hierarchy = cv2.findContours(buffer_array, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
+                        if not contours==[]:
+                            contours_3d = []
+                            for cnt in contours:
+                                cnt_3d = []
+                                for vtx in cnt:
+                                    cnt_3d += [[vtx[0][0]-1+chunk[1],vtx[0][1]-1+chunk[0], layer+chunk[2]]] #subtract 1 to adjust back after buffer
+                                contours_3d += [cnt_3d]
+                            self.contours +=contours_3d
+        #self.save_contours(contour_file)
+    
+    def find_contours(self, label_ids, z_list):
+        tot_contours = []
+        for label in label_ids:
+            tile_list = self.get_tile_list(label, z_list)
+            for tile in tile_list:
+                x = tile[1]
+                y = tile[2]
+                z = tile[3]
+                z_folder = self.z_folders[z]
+                tile_files = glob.glob(z_folder + "\\*")
+                for tile_name in tile_files:
+                    if os.path.basename(tile_name) == "y={0:08},x={1:08}.hdf5".format(y, x):
+                        t_file = h5py.File(tile_name, "r")
+                        labels = t_file[self.label_key][...]
+                        labels[labels!=label] = 0
+                        labels[labels==label] = 255
+                        labels = labels.astype(np.uint8)
+                        buffer_array = np.zeros((np.shape(labels)[0]+2, np.shape(labels)[1]+2), np.uint8) #buffer by one pixel on each side
+                        buffer_array[1:-1, 1:-1] = labels
+                        contours, hierarchy  = cv2.findContours(buffer_array, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
+                        if not contours == []:
+                            contours_3d = []
+                            for cnt in contours:
+                                cnt_3d =[]
+                                for vtx in cnt:
+                                    cnt_3d +=[[vtx[0][0]-1+x*(self.tile_columns), (vtx[0][1]-1) + y*(self.tile_rows), z]]
+    
+                                contours_3d +=[cnt_3d]
+                            tot_contours+=contours_3d
+                        
+        return tot_contours                        
+                
+            
+            
+    def get_tile_list(self, label, z_list):
+        con = sqlite.connect(self.segment_file)
+        cur = con.cursor()
+        #w = 0 requirement specifies highest resolution
+        cur.execute('select w,x,y,z from idTileIndex where w =' +str(self.w) + ' AND id =' + str(label))
+        tile_list = cur.fetchall()
+        end_tile_list = []
+        for tile in tile_list:
+            if tile[3] in z_list:
+                end_tile_list += [tile]
+        return end_tile_list
+    
+    def organize_chunks(self, keys):
+        chunk_list = []
+        for key in keys:
+            chunk_list += self.chunk_map[key]
+        chunk_list.sort(key=lambda x: x[2]) #sort w/respect to z
+        chunk_list.reverse() #make back to front
+        return chunk_list
         
     def create_arcball(self):
         arcball = arc.Arcball()
@@ -134,6 +256,7 @@ class Viewer:
         return
         
     def draw_marker(self):
+        '''Draws a sphere around the chosen point. Color is inverse of chosen pixel'''
         glMatrixMode(GL_MODELVIEW)
         glPushMatrix()
         location = self.pick_location
@@ -145,7 +268,7 @@ class Viewer:
         glColor3f(1-(1.0*location[0]/(self.columns-1)),
             1-(-1.0*location[1]/(self.rows-1)+1.0), 
             1-(-1.0*location[2]/(self.layers-1)+1.0))
-        glutSolidSphere(10, 50, 50)
+        glutSolidSphere(1, 50, 50)
         
         glPopMatrix()
         
@@ -161,33 +284,40 @@ class Viewer:
         elif (button == GLUT_RIGHT_BUTTON and state == GLUT_DOWN):
             self.left = False #turn off dragging rotation
             self.pick_location = self.pick(x,y)
+            print self.pick_location
             self.has_marker = True
-            self.slice = self.show_slice(self.pick_location).astype(np.uint8)
+            self.slice = self.show_slice(self.pick_location)
         
         
+        
+    #Fix data gathering for slice to work with mojo format
     def show_slice(self, location):
         '''displays a single selected z slice in 2-d'''
-        full_layer = self.ds[:, :, location[2]][...]
-        layer =np.zeros(np.shape(full_layer))
-        max_key = 0 #used to scale colors to 256 colors
-        for key in self.keys:
-            if key > max_key:
-                max_key = key
-            layer[full_layer == key] = key
-        layer = 255*layer/key
-        plt.imshow(layer)
+        layer = self.find_contours(self.label_ids, [location[2]])
         return layer
         
     def draw_slice(self):
         '''draws a single z slice'''
-        if self.slice != None:
-            width = float(np.shape(self.slice)[1])
-            height = float(np.shape(self.slice)[0])
-            glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)
-            #scale window to size of slice
-            glPixelZoom(self.win_w/width, self.win_h/height)
-            glDrawPixels(width, height, GL_LUMINANCE, GL_UNSIGNED_BYTE, self.slice)
-            glutSwapBuffers()
+        if self.slice == None:
+            self.slice = self.show_slice(self.pick_location)
+        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)
+        glMatrixMode(GL_MODELVIEW)
+        glPushMatrix()
+        glTranslatef(-.9, .9, .9)
+        glScalef(1.8/self.columns, -1.8/self.rows, -1.8/self.layers)
+        
+        #draw the layers
+        for cnt in self.slice:
+            gluTessBeginPolygon(self.tesselator, None)
+            gluTessBeginContour(self.tesselator)
+            for vtx in cnt:
+                gluTessVertex(self.tesselator, vtx, vtx)
+            gluTessEndContour(self.tesselator)
+            gluTessEndPolygon(self.tesselator)
+        
+        glPopMatrix()
+        
+        glutSwapBuffers()
     
     def pick(self, x,y):
         '''gets the (x,y,z) location in the full volume of a chosen pixel'''
@@ -201,76 +331,6 @@ class Viewer:
         if self.left:
             self.arcball.drag((x,y))
             self.draw()
-    
-    def main(self, window_height, window_width, keys, contour_file):
-        self.keys = keys
-        self.contours = self.load_contours(contour_file)
-        self.win_h = window_height
-        self.win_w = window_width
-        self.arcball = self.create_arcball()
-        glutInit(sys.argv)
-        glutInitDisplayMode(GLUT_RGBA | GLUT_DOUBLE | GLUT_DEPTH)
-        glutInitWindowSize(self.win_w, self.win_h) #width, height
-        glutCreateWindow("Nerve Cord")
-        
-        glMatrixMode(GL_PROJECTION)
-        glLoadIdentity()
-        gluPerspective(65, 1, 1, 10)
-        glMatrixMode(GL_MODELVIEW)
-        
-        self.tesselator = gluNewTess()
-        gluTessCallback(self.tesselator, GLU_TESS_BEGIN, glBegin)
-        gluTessCallback(self.tesselator, GLU_TESS_END, glEnd)
-        gluTessCallback(self.tesselator, GLU_TESS_VERTEX, self.vertex_callback) 
-        
-        glEnable(GL_DEPTH_TEST)
-        
-        self.make_display_list()
-        glutDisplayFunc(self.draw)
-        glutKeyboardFunc(self.keyboard)
-        glutMouseFunc(self.on_click)
-        glutMotionFunc(self.on_drag)
-        
-        glutCreateWindow("single layer")
-        glutDisplayFunc(self.draw_slice)
-        
-        
-        glutMainLoop()
-        return
-        
-        
-    def get_contours(self, keys, contour_file):
-        chunk_list = self.organize_chunks(keys)
-        self.keys = keys
-        for chunk in chunk_list:
-            for layer in reversed(range(self.chunk_layers)):
-                for key in keys:
-                    if not layer+chunk[2]>= self.layers: #make sure we stay within bounds
-                        labels = self.ds[chunk[0]:chunk[0]+self.chunk_rows, chunk[1]:chunk[1]+self.chunk_columns, chunk[2]+layer][...]
-                        labels[labels!=key] = 0
-                        labels[labels==key] = 255
-                        labels = labels.astype(np.uint8)
-                        buffer_array = np.zeros((np.shape(labels)[0] +2, np.shape(labels)[1]+2), np.uint8) #buffer by one pixel on each side
-                        buffer_array[1:-1, 1:-1] = labels 
-                        contours, hierarchy = cv2.findContours(buffer_array, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
-                        if not contours==[]:
-                            contours_3d = []
-                            for cnt in contours:
-                                cnt_3d = []
-                                for vtx in cnt:
-                                    cnt_3d += [[vtx[0][0]-1+chunk[1],vtx[0][1]-1+chunk[0], layer+chunk[2]]] #subtract 1 to adjust back after buffer
-                                contours_3d += [cnt_3d]
-                            self.contours +=contours_3d
-        self.save_contours(contour_file)
-        
-        
-    def organize_chunks(self, keys):
-        chunk_list = []
-        for key in keys:
-            chunk_list += self.chunk_map[key]
-        chunk_list.sort(key=lambda x: x[2]) #sort w/respect to z
-        chunk_list.reverse() #make back to front
-        return chunk_list
         
     def read_chunk_map(self, chunk_file):
         return pickle.load(open(chunk_file, "rb"))
@@ -283,23 +343,14 @@ class Viewer:
         return pickle.load(open(contour_file, "rb"))
         
     def axes(self):
+        '''generates vertices for a box'''
         self.x_axis = [[[0,0,0], [self.columns, 0,0]], [[0,self.rows,0], [self.columns, self.rows, 0]],
                         [[0,0,self.layers], [self.columns,0,self.layers]], [[0, self.rows, self.layers], [self.columns, self.rows, self.layers]]]
         self.y_axis = [[[0,0,0], [0, self.rows,0]], [[self.columns,0,0],[self.columns, self.rows, 0]], [[0,0,self.layers], [0,self.rows, self.layers]],
                         [[self.columns, 0, self.layers],[self.columns, self.rows, self.layers]]]
         self.z_axis = [[[0,0,0], [0,0,self.layers]], [[self.columns,0,0],[self.columns, 0, self.layers]],
                         [[0, self.rows,0], [0, self.rows, self.layers]],[[self.columns, self.rows, 0],[self.columns, self.rows, self.layers]]]
-        
-        '''for lines in [self.x_axis, self.y_axis, self.z_axis]:
-            for line in lines:
-                for vtx in line:
-                    vtx[0] = 1.8*(float(vtx[0])/float(self.columns)-0.5)
-                    vtx[1] = -1.8*(float(vtx[1])/float(self.rows)-0.5)
-                    vtx[2] = -1.8*(float(vtx[2])/float(self.layers)-0.5)'''
-    
-        
-        
+          
 
-viewer = Viewer(r'C:\Users\DanielMiron\Documents\3d_rendering\labels_full.h5',
-                r'C:\Users\DanielMiron\Documents\3d_rendering\label_full_chunk_map.p')
-viewer.main(1000,1000, [6642,4627], r'C:\Users\DanielMiron\Documents\3d_rendering\contours_full.p')
+viewer = Viewer('C:\\MojoData\\ac3x75\\mojo', [3036],0, (500, 500, 0))
+#viewer.main(1000,1000, [6642,4627], r'C:\Users\DanielMiron\Documents\3d_rendering\contours_full.p')
