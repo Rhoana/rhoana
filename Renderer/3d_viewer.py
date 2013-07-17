@@ -15,6 +15,7 @@ import sys
 sys.path.append(r'c:\Python27\Lib\site-packages')
 import pickle
 import math
+import time
 from OpenGL.GLUT import *
 from OpenGL.GLU import *
 from OpenGL.GL import *
@@ -26,6 +27,7 @@ import cv2
 
 class Viewer:
     def __init__(self, directory, label_ids, resolution_level, location):
+        self.st = time.time()
         self.arcball = None
         self.directory = directory
         self.w = resolution_level
@@ -33,7 +35,6 @@ class Viewer:
         self.label_folder = self.directory +"\\ids\\tiles\\" + self.w_str
         
         self.segment_file = self.directory + "\\ids\\segmentInfo.db"
-        
         self.z_folders = glob.glob(self.label_folder + "\\*")
         h5_file = h5py.File(glob.glob(self.z_folders[0] + "\\*")[0], "r")
         self.label_key = h5_file.keys()[0]
@@ -55,7 +56,6 @@ class Viewer:
         
         self.label_ids = label_ids
         self.contours = self.find_contours(label_ids, range(self.layers))
-        
         self.win_h = 0
         self.win_w = 0
         
@@ -80,14 +80,19 @@ class Viewer:
         gluPerspective(65, 1, 1, 10)
         glMatrixMode(GL_MODELVIEW)
         
-        self.tesselator = gluNewTess()
-        gluTessCallback(self.tesselator, GLU_TESS_BEGIN, glBegin)
-        gluTessCallback(self.tesselator, GLU_TESS_END, glEnd)
-        gluTessCallback(self.tesselator, GLU_TESS_VERTEX, self.vertex_callback) 
+        self.back_tesselator = gluNewTess()
+        gluTessCallback(self.back_tesselator, GLU_TESS_BEGIN, glBegin)
+        gluTessCallback(self.back_tesselator, GLU_TESS_END, glEnd)
+        gluTessCallback(self.back_tesselator, GLU_TESS_VERTEX, self.back_vertex)
+        
+        self.front_tesselator = gluNewTess()
+        gluTessCallback(self.front_tesselator, GLU_TESS_BEGIN, glBegin)
+        gluTessCallback(self.front_tesselator, GLU_TESS_END, glEnd)
+        gluTessCallback(self.front_tesselator, GLU_TESS_VERTEX, self.front_vertex) 
         
         glEnable(GL_DEPTH_TEST)
         
-        self.make_display_list()
+        self.make_display_lists()
         glutDisplayFunc(self.draw)
         glutKeyboardFunc(self.keyboard)
         glutMouseFunc(self.on_click)
@@ -100,29 +105,6 @@ class Viewer:
         
         glutMainLoop()
         return
-        
-    def get_contours(self, keys):
-        chunk_list = self.organize_chunks(keys)
-        for chunk in chunk_list:
-            for layer in reversed(range(self.chunk_layers)):
-                for key in keys:
-                    if not layer+chunk[2]>= self.layers: #make sure we stay within bounds
-                        labels = self.ds[chunk[0]:chunk[0]+self.chunk_rows, chunk[1]:chunk[1]+self.chunk_columns, chunk[2]+layer][...]
-                        labels[labels!=key] = 0
-                        labels[labels==key] = 255
-                        labels = labels.astype(np.uint8)
-                        buffer_array = np.zeros((np.shape(labels)[0]+2, np.shape(labels)[1]+2), np.uint8) #buffer by one pixel on each side
-                        buffer_array[1:-1, 1:-1] = labels 
-                        contours, hierarchy = cv2.findContours(buffer_array, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
-                        if not contours==[]:
-                            contours_3d = []
-                            for cnt in contours:
-                                cnt_3d = []
-                                for vtx in cnt:
-                                    cnt_3d += [[vtx[0][0]-1+chunk[1],vtx[0][1]-1+chunk[0], layer+chunk[2]]] #subtract 1 to adjust back after buffer
-                                contours_3d += [cnt_3d]
-                            self.contours +=contours_3d
-        #self.save_contours(contour_file)
     
     def find_contours(self, label_ids, z_list):
         tot_contours = []
@@ -132,27 +114,29 @@ class Viewer:
                 x = tile[1]
                 y = tile[2]
                 z = tile[3]
-                z_folder = self.z_folders[z]
-                tile_files = glob.glob(z_folder + "\\*")
-                for tile_name in tile_files:
-                    if os.path.basename(tile_name) == "y={0:08},x={1:08}.hdf5".format(y, x):
-                        t_file = h5py.File(tile_name, "r")
-                        labels = t_file[self.label_key][...]
-                        labels[labels!=label] = 0
-                        labels[labels==label] = 255
-                        labels = labels.astype(np.uint8)
-                        buffer_array = np.zeros((np.shape(labels)[0]+2, np.shape(labels)[1]+2), np.uint8) #buffer by one pixel on each side
-                        buffer_array[1:-1, 1:-1] = labels
-                        contours, hierarchy  = cv2.findContours(buffer_array, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
-                        if not contours == []:
-                            contours_3d = []
-                            for cnt in contours:
-                                cnt_3d =[]
-                                for vtx in cnt:
-                                    cnt_3d +=[[vtx[0][0]-1+x*(self.tile_columns), (vtx[0][1]-1) + y*(self.tile_rows), z]]
-    
-                                contours_3d +=[cnt_3d]
-                            tot_contours+=contours_3d
+                if True:
+                    z_folder = self.z_folders[z]
+                    tile_files = glob.glob(z_folder + "\\*")
+                    for tile_name in tile_files:
+                        if os.path.basename(tile_name) == "y={0:08},x={1:08}.hdf5".format(y, x):
+                            t_file = h5py.File(tile_name, "r")
+                            labels = t_file[self.label_key][...]
+                            labels[labels!=label] = 0
+                            labels[labels==label] = 255
+                            labels = labels.astype(np.uint8)
+                            t_file.close()
+                            buffer_array = np.zeros((np.shape(labels)[0]+2, np.shape(labels)[1]+2), np.uint8) #buffer by one pixel on each side
+                            buffer_array[1:-1, 1:-1] = labels
+                            contours, hierarchy  = cv2.findContours(buffer_array, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
+                            if not contours == []:
+                                contours = [np.array(cnt) for cnt in contours]
+                                for idx, cnt in enumerate(contours):
+                                    new_cnt = np.zeros((cnt.shape[0], 3))
+                                    new_cnt[:, 0] = cnt[:, 0, 0] - 1 + x * self.tile_columns
+                                    new_cnt[:, 1] = cnt[:, 0, 1] - 1 + y*self.tile_rows
+                                    new_cnt[:, 2] = z
+                                    contours[idx] = new_cnt
+                                tot_contours+=contours
                         
         return tot_contours                        
                 
@@ -184,25 +168,64 @@ class Viewer:
         arcball.place([self.win_w/2, self.win_h/2], self.win_w/2)
         return arcball
         
-    def make_display_list(self):
-        '''Creates a display list to draw a box and the data scaled to .9*the size of the window'''
+    def make_display_lists(self):
+        self.display_lists = glGenLists(2) #first list for front, second for back
+        self.make_front_list()
+        self.make_back_list()
         
-        self.display_list = glGenLists(1)
-        glNewList(self.display_list, GL_COMPILE)
+    def make_back_list(self):
+        '''Creates a display list to encode color for image. Not seen by user'''
+        glNewList(self.display_lists +1, GL_COMPILE)
         
+        glDrawBuffer(GL_BACK)
+        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)
+        glMatrixMode(GL_MODELVIEW)
+        glPushMatrix()
+        glTranslatef(-.9, .9, .9)
+        glScalef(1.8/self.columns, -1.8/self.rows, -1.8/self.layers)
+        #draw the layers
+        for cnt in self.contours:
+            gluTessBeginPolygon(self.back_tesselator, None)
+            gluTessBeginContour(self.back_tesselator)
+            for vtx in cnt:
+                gluTessVertex(self.back_tesselator, vtx, vtx)
+            gluTessEndContour(self.back_tesselator)
+            gluTessEndPolygon(self.back_tesselator)
+        
+        glColor3f(.5, .5, .5)
+        glBegin(GL_POLYGON)
+        glVertex3f(*self.x_axis[2][0])
+        glVertex3f(*self.x_axis[2][1])
+        glVertex3f(*self.x_axis[3][1])
+        glVertex3f(*self.x_axis[3][0])
+        glEnd()
+        
+        glPopMatrix()
+        
+        glEndList()
+        
+    def make_front_list(self):
+        '''Creates a display list to draw a box and the data scaled to .9*the size of the window.
+        This list deals with the display seen by the user'''
+        
+        glNewList(self.display_lists, GL_COMPILE)
+        
+        glDrawBuffer(GL_FRONT)
+        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)
         glMatrixMode(GL_MODELVIEW)
         glPushMatrix()
         glTranslatef(-.9, .9, .9)
         glScalef(1.8/self.columns, -1.8/self.rows, -1.8/self.layers)
         
         #draw the layers
+        glColor3f(1.0, 1.0, 0.0)
         for cnt in self.contours:
-            gluTessBeginPolygon(self.tesselator, None)
-            gluTessBeginContour(self.tesselator)
+            gluTessBeginPolygon(self.front_tesselator, None)
+            gluTessBeginContour(self.front_tesselator)
             for vtx in cnt:
-                gluTessVertex(self.tesselator, vtx, vtx)
-            gluTessEndContour(self.tesselator)
-            gluTessEndPolygon(self.tesselator)
+                gluTessVertex(self.front_tesselator, vtx, vtx)
+            gluTessEndContour(self.front_tesselator)
+            gluTessEndPolygon(self.front_tesselator)
             
         #make a box around the image
         self.axes()
@@ -234,7 +257,10 @@ class Viewer:
         
         glEndList()
         
-    def vertex_callback(self, vertex):
+    def front_vertex(self, vertex):
+        glVertex3f(*vertex)
+        
+    def back_vertex(self, vertex):
         '''sets the color of a single vertex and draws it'''
         #scale by dim-1 to include black 
         #multiply by -1 and add 1 to invert color axis
@@ -243,20 +269,21 @@ class Viewer:
         
     def draw(self):
         '''draws an image'''
-        
-        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)
         glLoadIdentity()
         gluLookAt(0, 0, 3, 0, 0, 2, 0,1,0)
         glMultMatrixd(self.arcball.matrix().T)
         
+        glCallList(self.display_lists)
+        glCallList(self.display_lists+1)
         self.draw_marker()
-    
-        glCallList(self.display_list)
-        glutSwapBuffers()
+        
+        glFlush()
+        
         return
         
     def draw_marker(self):
         '''Draws a sphere around the chosen point. Color is inverse of chosen pixel'''
+        glDrawBuffer(GL_FRONT)
         glMatrixMode(GL_MODELVIEW)
         glPushMatrix()
         location = self.pick_location
@@ -265,10 +292,12 @@ class Viewer:
                     -(float(1.8*location[2])/self.layers-.9))
         glScalef(1.8/self.layers, 1.8/self.layers, 1.8/self.layers)
         location = self.pick_location
+        
+        #Figure out how to deal with color of neurons versus color of marker
         glColor3f(1-(1.0*location[0]/(self.columns-1)),
             1-(-1.0*location[1]/(self.rows-1)+1.0), 
             1-(-1.0*location[2]/(self.layers-1)+1.0))
-        glutSolidSphere(1, 50, 50)
+        glutSolidSphere(5, 50, 50)
         
         glPopMatrix()
         
@@ -288,8 +317,6 @@ class Viewer:
             self.has_marker = True
             self.slice = self.show_slice(self.pick_location)
         
-        
-        
     #Fix data gathering for slice to work with mojo format
     def show_slice(self, location):
         '''displays a single selected z slice in 2-d'''
@@ -308,12 +335,12 @@ class Viewer:
         
         #draw the layers
         for cnt in self.slice:
-            gluTessBeginPolygon(self.tesselator, None)
-            gluTessBeginContour(self.tesselator)
+            gluTessBeginPolygon(self.front_tesselator, None)
+            gluTessBeginContour(self.front_tesselator)
             for vtx in cnt:
-                gluTessVertex(self.tesselator, vtx, vtx)
-            gluTessEndContour(self.tesselator)
-            gluTessEndPolygon(self.tesselator)
+                gluTessVertex(self.front_tesselator, vtx, vtx)
+            gluTessEndContour(self.front_tesselator)
+            gluTessEndPolygon(self.front_tesselator)
         
         glPopMatrix()
         
@@ -322,6 +349,7 @@ class Viewer:
     def pick(self, x,y):
         '''gets the (x,y,z) location in the full volume of a chosen pixel'''
         click_color = None
+        glReadBuffer(GL_BACK)
         click_color = glReadPixels(x,self.win_h-y, 1,1, GL_RGB, GL_FLOAT)[0][0]
         location  = [int(click_color[0]*(self.columns-1)), 
                     int(-(click_color[1]-1)*(self.rows-1)), int(-(click_color[2]-1)*((self.layers-1)))]
@@ -352,5 +380,6 @@ class Viewer:
                         [[0, self.rows,0], [0, self.rows, self.layers]],[[self.columns, self.rows, 0],[self.columns, self.rows, self.layers]]]
           
 
-viewer = Viewer('C:\\MojoData\\ac3x75\\mojo', [3036],0, (500, 500, 0))
+#viewer = Viewer('C:\\MojoData\\ac3x75\\mojo', [3036],0, (500, 500, 0))
+viewer = Viewer('C:\\Users\\DanielMiron\\Documents\\Mojo\\Cube2\\mojo', [2761052],4, (500, 500, 0))
 #viewer.main(1000,1000, [6642,4627], r'C:\Users\DanielMiron\Documents\3d_rendering\contours_full.p')
