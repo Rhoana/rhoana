@@ -74,7 +74,6 @@ class Extractor:
         
     def run(self):
         for label_set in self.label_ids:
-            print label_set
             color = self.color_map[label_set[0] % len(self.color_map)]
             #color = self.color_map[1]
             for z in self.z_order:
