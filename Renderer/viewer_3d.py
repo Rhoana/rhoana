@@ -270,11 +270,12 @@ class Viewer:
         glPopMatrix()
         
     def keyboard(self, key, x, y):
-        if key == chr(27):
+        if key == chr(27): #escape to quit
             sys.exit()
         return
         
     def on_scroll(self, wheel, direction, x, y):
+        '''zooms in and out on mouse scroll wheel'''
         if direction == 1:
             glMatrixMode(GL_PROJECTION)
             glLoadIdentity()
@@ -316,6 +317,7 @@ class Viewer:
         return location, marker_color
         
     def on_drag(self, x, y):
+        '''rotates image on dragging with left mouse down'''
         if self.left:
             self.arcball.drag((x,y))
             self.draw()
@@ -352,20 +354,21 @@ if __name__ == '__main__':
     
     ids = []
     for label_set in (sys.argv[5:len(sys.argv)]):
-        ids += [[int(label) for label in re.split(':|,', label_set)]]
-    
-    print ids
-    
+        primary_id = []
+        secondary_ids = []
+        split_str = re.split(":", label_set)
+        primary_id = [int(split_str[0])]
+        if split_str[1] != "":
+            secondary_ids = [int(label) for label in re.split(',', split_str[1])]
+        ids += [primary_id + secondary_ids]
+        
     extractor = extractor.Extractor(display_queue, directory, ids, resolution_level, location)
     viewer  = Viewer(location, display_queue)
     
-    print extractor.rows, extractor.columns, extractor.layers
     viewer.set_dimensions(extractor.rows, extractor.columns, extractor.layers)
     
     extracting_worker = threading.Thread(target = extractor.run, name = "extractor")
-    
     extracting_worker.daemon = True
-    
     extracting_worker.start()
     
     viewer.main()
