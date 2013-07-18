@@ -349,7 +349,7 @@ if __name__ == '__main__':
     #extract command line arguments
     directory = sys.argv[0]
     
-    location = (int(sys.argv[2]), int(sys.argv[3]), int(sys.argv[4])) #x,y,z
+    location = (int(sys.argv[1]), int(sys.argv[2]), int(sys.argv[3])) #x,y,z
     resolution_level = int(sys.argv[4]) #w
     
     ids = []
