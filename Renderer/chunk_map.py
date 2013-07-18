@@ -8,6 +8,7 @@
 import h5py
 import numpy as np
 import time
+import math
 import sys
 sys.path.append(r'c:\Python27\Lib\site-packages')
 import pickle
@@ -17,15 +18,19 @@ class Chunk_Map:
     def __init__(self, label_file):
         self.label_file = h5py.File(label_file, 'r')
 
-        self.ds = self.label_file["labels"]
+        self.ds = self.label_file["main"]
 
         self.rows = self.ds.shape[0]
         self.columns = self.ds.shape[1]
         self.layers = self.ds.shape[2]
         
-        self.chunk_rows = self.ds.chunks[0]
+        '''self.chunk_rows = self.ds.chunks[0]
         self.chunk_columns = self.ds.chunks[1]
-        self.chunk_layers = self.ds.chunks[2]
+        self.chunk_layers = self.ds.chunks[2]'''
+        
+        self.chunk_rows = 64
+        self.chunk_columns = 64
+        self.chunk_layers = 16
         self.chunk_map = self.make_map()
         
     def make_map(self):
@@ -35,15 +40,15 @@ class Chunk_Map:
         #indices are for start of chunk 
         chunk_map = dict()
         #for r_chunk_n in range(20):
-        for r_chunk_n in range(self.rows/(self.chunk_rows) +1):
+        for r_chunk_n in range(int(math.ceil(self.rows/self.chunk_rows))):
             print time.time()-st
             start_r = r_chunk_n*self.chunk_rows
             end_r = start_r + self.chunk_rows
             #for c_chunk_n in range(20):
-            for  c_chunk_n in range(self.columns/(self.chunk_columns) +1):
+            for  c_chunk_n in range(int(math.ceil(self.columns/self.chunk_columns))):
                 start_c = c_chunk_n*self.chunk_columns
                 end_c = start_c + self.chunk_columns
-                for l_chunk_n in range(self.layers/(self.chunk_layers) +1):
+                for l_chunk_n in range(int(math.ceil(self.layers/self.chunk_layers))):
                     start_l = l_chunk_n*self.chunk_layers
                     end_l = start_l +self.chunk_layers
                     chunk = self.ds[start_r:end_r, start_c:end_c, start_l:end_l][...]
@@ -61,5 +66,5 @@ class Chunk_Map:
         pickle.dump(self.chunk_map, open(chunk_file, "wb"))
         
         
-chunk_map = Chunk_Map(r'C:\Users\DanielMiron\Documents\3d_rendering\labels.hdf5')
-chunk_map.save_pickle(r'C:\Users\DanielMiron\Documents\3d_rendering\label_chunk_map.p')
+chunk_map = Chunk_Map(r'C:\Users\DanielMiron\Documents\3d_rendering\labels_full.h5')
+chunk_map.save_pickle(r'C:\Users\DanielMiron\Documents\3d_rendering\label_full_chunk_map.p')
