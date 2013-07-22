@@ -29,8 +29,10 @@ import arcball as arc
 from pysqlite2 import dbapi2 as sqlite
 
 import cv2
+import select
 
 import extractor
+import input_handler as handler
 
 from ctypes import util
 try:
@@ -39,11 +41,14 @@ except AttributeError:
     pass
 
 class Viewer:
-    def __init__(self, location, in_q):
+    def __init__(self, location, in_q, directory, max_x, max_y):
         self.st = time.time()
         self.arcball = None
         
+        self.directory = directory
         self.in_q =in_q
+        self.max_x = max_x
+        self.max_y = max_y
         
         self.rows = 0
         self.columns = 0
@@ -59,18 +64,19 @@ class Viewer:
         self.display_list_idx = 1
         self.marker_color = [1., 1., 1.] #initial marker is white
         
-    def set_dimensions(self, rows, columns, layers):
+        
+        
+    def set_dimensions(self, rows, columns, layers, w):
         self.rows = rows
         self.columns = columns
         self.layers = layers
+        self.pick_location = (self.pick_location[0]/pow(2, w) - 1, self.pick_location[1]/pow(2, w) - 1, self.pick_location[2])
         
     def main(self):
         #self.contours = self.load_contours(contour_file)
         #set window height and width
         self.win_h = 1000
         self.win_w = 1000
-        self.view_w = self.win_w
-        self.view_h = self.win_h
         self.arcball = self.create_arcball()
         glutInit(sys.argv)
         glutInitDisplayMode(GLUT_RGBA | GLUT_DOUBLE | GLUT_DEPTH)
@@ -102,15 +108,43 @@ class Viewer:
         glutMotionFunc(self.on_drag)
         glutMouseWheelFunc(self.on_scroll)
         glutIdleFunc(self.on_idle)
+        glutReshapeFunc(self.on_resize)
         
         glutMainLoop()
         return          
+        
+    def on_resize(self, w, h):
+        self.win_h = h
+        self.win_w = w
+        glViewport(0,0, w,h)
+        self.arcball = self.create_arcball()
             
     def on_idle(self):
-        while(not self.in_q.empty()):
-            contours, color = self.in_q.get()
-            self.make_display_lists(contours, color/255.0)
-            self.draw()
+            while(not self.in_q.empty()):
+                temp = self.in_q.get()
+                if type(temp) is list:
+                    #draw contours
+                    contours =  temp[0]
+                    color = temp[1]
+                    self.make_display_lists(contours, color/255.0)
+                    self.draw()
+                else:
+                    #add new extractor
+                    args = temp.split()
+                    location = (int(args[0]), int(args[1]), int(args[2]))
+                    
+                    primary_id = []
+                    secondary_ids = []
+                    split_str = re.split(":", args[3])
+                    primary_id = [int(split_str[0])]
+                    if split_str[1] != "":
+                        secondary_ids = [int(label) for label in re.split(',', split_str[1])]
+                    ids = [primary_id + secondary_ids]
+
+                    extr = extractor.Extractor(self.in_q, self.directory, ids, location, max_x, max_y)
+                    extracting_worker = threading.Thread(target = extr.run, name = "extr")
+                    extracting_worker.daemon = True
+                    extracting_worker.start()
         
     def get_tile_list(self, label, z_list):
         con = sqlite.connect(self.segment_file)
@@ -189,6 +223,13 @@ class Viewer:
             
         #make a box around the image
         self.axes()
+        self.make_box()
+        
+        glPopMatrix()
+        
+        glEndList()
+        
+    def make_box(self):
         glBegin(GL_LINES)
         glColor3f(1.0, 0, 0) #x in red
         for line in self.x_axis:
@@ -202,20 +243,19 @@ class Viewer:
         for line in self.z_axis:
             glVertex3f(line[0][0], line[0][1], line[0][2])
             glVertex3f(line[1][0], line[1][1], line[1][2])
-        glEnd()  
+        glEnd() 
+                
+        glColor3f(0.5, 0.5, 0.5)
         
-        #make a back panel for easy orientation
-        glColor3f(.5, .5, .5)
-        glBegin(GL_POLYGON)
-        glVertex3f(*self.x_axis[2][0])
-        glVertex3f(*self.x_axis[2][1])
-        glVertex3f(*self.x_axis[3][1])
-        glVertex3f(*self.x_axis[3][0])
-        glEnd()
-        
-        glPopMatrix()
-        
-        glEndList()
+        #10.0 gives reasonable font size
+        glScalef(10.0/self.columns, -10.0/self.rows, -10.0/self.layers)
+        glutStrokeString(GLUT_STROKE_ROMAN, "(0,0,0)")
+        glTranslatef(self.columns*self.columns/10.8, 0,0)
+        glutStrokeString(GLUT_STROKE_ROMAN, "x=" + str(self.columns))
+        glTranslatef(-self.columns*self.columns/10.0, -self.rows*self.rows/10.0, 0)
+        glutStrokeString(GLUT_STROKE_ROMAN, "y=" + str(self.rows))
+        glTranslatef(0, self.rows*self.rows/10.0, -self.layers*self.layers/10.0)
+        glutStrokeString(GLUT_STROKE_ROMAN, "z=" + str(self.layers))
         
     def front_vertex(self, vertex):
         glVertex3f(*vertex)
@@ -260,12 +300,8 @@ class Viewer:
         glTranslatef(float(1.8*location[0])/self.columns-.9,
                     -(float(1.8*location[1])/self.rows-.9),
                     -(float(1.8*location[2])/self.layers-.9))
-        glScalef(1.8/self.layers, 1.8/self.layers, 1.8/self.layers)
-        location = self.pick_location
-        
-        #Figure out how to deal with color of neurons versus color of marker
         glColor3f(*self.marker_color)
-        glutSolidSphere(10, 50, 50)
+        glutSolidSphere(.01, 50, 50)
         
         glPopMatrix()
         
@@ -302,6 +338,7 @@ class Viewer:
             self.draw(pick=True)
             self.pick_location, self.marker_color = self.pick(x,y)
             print self.pick_location
+            sys.stdout.flush()
             self.has_marker = True
     
     def pick(self, x,y):
@@ -350,10 +387,12 @@ if __name__ == '__main__':
     directory = sys.argv[0]
     
     location = (int(sys.argv[1]), int(sys.argv[2]), int(sys.argv[3])) #x,y,z
-    resolution_level = int(sys.argv[4]) #w
+    #resolution_level = int(sys.argv[4]) #w
+    max_x =int(sys.argv[4])
+    max_y = int(sys.argv[5])
     
     ids = []
-    for label_set in (sys.argv[5:len(sys.argv)]):
+    for label_set in (sys.argv[6:len(sys.argv)]):
         primary_id = []
         secondary_ids = []
         split_str = re.split(":", label_set)
@@ -362,15 +401,18 @@ if __name__ == '__main__':
             secondary_ids = [int(label) for label in re.split(',', split_str[1])]
         ids += [primary_id + secondary_ids]
         
-    extractor = extractor.Extractor(display_queue, directory, ids, resolution_level, location)
-    viewer  = Viewer(location, display_queue)
+    extr = extractor.Extractor(display_queue, directory, ids, location, max_x, max_y)
+    viewer  = Viewer(location, display_queue, directory, max_x, max_y)
+    handler = handler.Input_Handler(display_queue)
     
-    viewer.set_dimensions(extractor.rows, extractor.columns, extractor.layers)
+    viewer.set_dimensions(extr.rows, extr.columns, extr.layers, extr.w)
     
-    extracting_worker = threading.Thread(target = extractor.run, name = "extractor")
+    extracting_worker = threading.Thread(target = extr.run, name = "extr")
+    input_worker = threading.Thread(target = handler.run, name = "input_worker")
+    
+    input_worker.daemon =True
     extracting_worker.daemon = True
     extracting_worker.start()
+    input_worker.start()
     
     viewer.main()
-    
-    

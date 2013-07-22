@@ -22,13 +22,13 @@ from Queue import Queue
 from pysqlite2 import dbapi2 as sqlite
 
 class Extractor:
-    def __init__(self, out_q, directory, label_ids, resolution_level, location):
+    def __init__(self, out_q, directory, label_ids, location, max_x, max_y):
         
         self.out_q = out_q
         
         self.directory = directory
-        self.w = resolution_level
-        self.w_str = "w={0:08}".format(resolution_level)
+        self.w = len(glob.glob(self.directory + "\\ids\\tiles\\*"))-1
+        self.w_str = "w={0:08}".format(self.w)
         self.label_folder = self.directory +"\\ids\\tiles\\" + self.w_str
         
         self.segment_file = self.directory + "\\ids\\segmentInfo.db"
@@ -43,9 +43,8 @@ class Extractor:
         
         self.tiles_per_layer = len(glob.glob(self.z_folders[0] + "\\*"))
         
-        #taking sqrt assumes same number of tiles in x direction as y direction
-        self.rows = self.shape[0]*math.sqrt(self.tiles_per_layer)
-        self.columns = self.shape[1]*math.sqrt(self.tiles_per_layer)
+        self.rows = max_x/pow(2, self.w) - 1
+        self.columns = max_y/pow(2, self.w) - 1
         self.layers = len(self.z_folders)
         
         #need to figure out way to get num_tiles in each direction when not square
@@ -54,10 +53,11 @@ class Extractor:
         
         self.label_ids = label_ids
         
-        self.z_order = self.make_z_order(location[2])\
+        self.z_order = self.make_z_order(location[2])
         
         color_file = h5py.File(self.directory + "\\ids\\colorMap.hdf5")
         self.color_map = color_file["idColorMap"][...]
+        color_file.close()
         
     def make_z_order(self, start_z):
         z_list = []
@@ -80,39 +80,37 @@ class Extractor:
                 contours = self.find_contours(label_set, [z])
                 if contours != []:
                     self.out_q.put([contours, color])
+                    time.sleep(0.001)
         
     def find_contours(self, label_ids, z_list):
         tot_contours = []
+        tile_list = []
         for label in label_ids:
-            tile_list = self.get_tile_list(label, z_list)
-            for tile in tile_list:
-                x = tile[1]
-                y = tile[2]
-                z = tile[3]
-                if True:
-                    z_folder = self.z_folders[z]
-                    tile_files = glob.glob(z_folder + "\\*")
-                    for tile_name in tile_files:
-                        if os.path.basename(tile_name) == "y={0:08},x={1:08}.hdf5".format(y, x):
-                            t_file = h5py.File(tile_name, "r")
-                            labels = t_file[self.label_key][...]
-                            labels[labels!=label] = 0
-                            labels[labels==label] = 255
-                            labels = labels.astype(np.uint8)
-                            t_file.close()
-                            buffer_array = np.zeros((np.shape(labels)[0]+2, np.shape(labels)[1]+2), np.uint8) #buffer by one pixel on each side
-                            buffer_array[1:-1, 1:-1] = labels
-                            contours, hierarchy  = cv2.findContours(buffer_array, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
-                            if not contours == []:
-                                contours = [np.array(cnt) for cnt in contours]
-                                for idx, cnt in enumerate(contours):
-                                    new_cnt = np.zeros((cnt.shape[0], 3))
-                                    new_cnt[:, 0] = cnt[:, 0, 0] - 1 + x * self.tile_columns
-                                    new_cnt[:, 1] = cnt[:, 0, 1] - 1 + y*self.tile_rows
-                                    new_cnt[:, 2] = z
-                                    contours[idx] = new_cnt
-                                tot_contours+=contours
-                        
+            tile_list += self.get_tile_list(label, z_list)
+        tile_list = set(tile_list)
+        for w,x, y, z in tile_list:
+            tile_files = glob.glob(self.z_folders[z] + "\\*")
+            for tile_name in tile_files:
+                if os.path.basename(tile_name) == "y={0:08},x={1:08}.hdf5".format(y, x):
+                    t_file = h5py.File(tile_name, "r")
+                    labels = t_file[self.label_key][...]
+                    t_file.close()
+                    buffer_array = np.zeros((np.shape(labels)[0]+2, np.shape(labels)[1]+2), np.uint8) #buffer by one pixel on each side
+                    
+                    for label in label_ids:
+                        buffer_array[1:-1, 1:-1] |= labels == label
+                    
+                    contours, hierarchy  = cv2.findContours(buffer_array, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
+                    if not contours == []:
+                        contours = [np.array(cnt) for cnt in contours]
+                        for idx, cnt in enumerate(contours):
+                            new_cnt = np.zeros((cnt.shape[0], 3))
+                            new_cnt[:, 0] = cnt[:, 0, 0] - 1 + x * self.tile_columns
+                            new_cnt[:, 1] = cnt[:, 0, 1] - 1 + y*self.tile_rows
+                            new_cnt[:, 2] = z
+                            contours[idx] = new_cnt
+                        tot_contours+=contours
+                
         return tot_contours
         
     def get_tile_list(self, label, z_list):
@@ -125,7 +123,5 @@ class Extractor:
         for tile in tile_list:
             if tile[3] in z_list:
                 end_tile_list += [tile]
+        con.close()
         return end_tile_list  
-        
-    
-
