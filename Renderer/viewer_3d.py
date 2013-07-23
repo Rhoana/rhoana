@@ -61,10 +61,11 @@ class Viewer:
         self.slice = None
         self.pick_location = location
         
-        self.display_list_idx = 1
+        self.display_list_idx = 2 #count from 1 and use first index for box
+        self.display_list_dict = dict() #COLOR as key, display_list indices as value
         self.marker_color = [1., 1., 1.] #initial marker is white
         
-        
+        self.first = True #used to control display list flow
         
     def set_dimensions(self, rows, columns, layers, w):
         self.rows = rows
@@ -78,10 +79,11 @@ class Viewer:
         self.win_h = 1000
         self.win_w = 1000
         self.arcball = self.create_arcball()
+        
         glutInit(sys.argv)
         glutInitDisplayMode(GLUT_RGBA | GLUT_DOUBLE | GLUT_DEPTH)
         glutInitWindowSize(self.win_w, self.win_h) #width, height
-        glutCreateWindow("Nerve Cord")
+        glutCreateWindow("3D View")
         
         glMatrixMode(GL_PROJECTION)
         glLoadIdentity()
@@ -100,8 +102,9 @@ class Viewer:
         gluTessCallback(self.front_tesselator, GLU_TESS_VERTEX, self.front_vertex) 
         
         glEnable(GL_DEPTH_TEST)
+        #glEnable(GL_LIGHTING)
+        #glEnable(GL_LIGHT0)
         
-        #self.make_display_lists()
         glutDisplayFunc(self.draw)
         glutKeyboardFunc(self.keyboard)
         glutMouseFunc(self.on_click)
@@ -126,7 +129,9 @@ class Viewer:
                     #draw contours
                     contours =  temp[0]
                     color = temp[1]
-                    self.make_display_lists(contours, color/255.0)
+                    primary_label = temp[2]
+                    normals = temp[3]
+                    self.make_display_lists(contours, color/255.0, primary_label, normals)
                     self.draw()
                 else:
                     #add new extractor
@@ -145,18 +150,20 @@ class Viewer:
                     extracting_worker = threading.Thread(target = extr.run, name = "extr")
                     extracting_worker.daemon = True
                     extracting_worker.start()
-        
-    def get_tile_list(self, label, z_list):
-        con = sqlite.connect(self.segment_file)
-        cur = con.cursor()
-        #w = 0 requirement specifies highest resolution
-        cur.execute('select w,x,y,z from idTileIndex where w =' +str(self.w) + ' AND id =' + str(label))
-        tile_list = cur.fetchall()
-        end_tile_list = []
-        for tile in tile_list:
-            if tile[3] in z_list:
-                end_tile_list += [tile]
-        return end_tile_list
+                    
+    def refresh(self):
+        #first display list is for the box
+        glDeleteLists(2, self.display_list_idx)
+        self.display_list_idx = 2
+        self.draw()
+    
+    def undo(self):
+        label = self.display_list_dict.keys()[0]
+        for display_list in self.display_list_dict[label]:
+            sys.stdout.flush()
+            glDeleteLists(display_list, 1) #delete back and front lists
+            self.display_list_idx
+            self.draw()
         
     def create_arcball(self):
         arcball = arc.Arcball()
@@ -164,10 +171,18 @@ class Viewer:
         arcball.place([self.win_w/2, self.win_h/2], self.win_w/2)
         return arcball
         
-    def make_display_lists(self, contours, color):
+    def make_display_lists(self, contours, color, label, normals):
+        if self.first:
+            display_list = glGenLists(1)
+            self.axes()
+            self.make_box_list()
+            self.first = False
         self.display_lists = glGenLists(2) #first list for front, second for back
-        
-        self.make_front_list(contours, color)
+        if label in self.display_list_dict:
+            self.display_list_dict[label] = self.display_list_dict[label] + [self.display_list_idx, self.display_list_idx+1] 
+        else:
+            self.display_list_dict[label] = [self.display_list_idx, self.display_list_idx+1]
+        self.make_front_list(contours, color, normals)
         self.make_back_list(contours)
         self.display_list_idx +=2
         
@@ -188,19 +203,11 @@ class Viewer:
             gluTessEndContour(self.back_tesselator)
             gluTessEndPolygon(self.back_tesselator)
         
-        glColor3f(.5, .5, .5)
-        glBegin(GL_POLYGON)
-        glVertex3f(*self.x_axis[2][0])
-        glVertex3f(*self.x_axis[2][1])
-        glVertex3f(*self.x_axis[3][1])
-        glVertex3f(*self.x_axis[3][0])
-        glEnd()
-        
         glPopMatrix()
         
         glEndList()
         
-    def make_front_list(self, contours, color):
+    def make_front_list(self, contours, color, normals):
         '''Creates a display list to draw a box and the data scaled to .9*the size of the window.
         This list deals with the display seen by the user'''
         
@@ -212,50 +219,73 @@ class Viewer:
         glScalef(1.8/self.columns, -1.8/self.rows, -1.8/self.layers)
         
         #draw the layers
+        #glMaterialfv(GL_FRONT_AND_BACK, GL_DIFFUSE, color) 
         glColor3f(*color)
-        for cnt in contours:
+        for cnt, normal in zip(contours, normals):
             gluTessBeginPolygon(self.front_tesselator, None)
             gluTessBeginContour(self.front_tesselator)
-            for vtx in cnt:
+            for vtx, norm in zip(cnt, normal):
+                #glNormal3d(*norm)
+                #print norm
                 gluTessVertex(self.front_tesselator, vtx, vtx)
             gluTessEndContour(self.front_tesselator)
             gluTessEndPolygon(self.front_tesselator)
-            
-        #make a box around the image
-        self.axes()
-        self.make_box()
-        
+         
         glPopMatrix()
         
         glEndList()
         
-    def make_box(self):
+    def make_box_list(self):
+        glNewList(1, GL_COMPILE)
+        
+        glMatrixMode(GL_MODELVIEW)
+        glPushMatrix()
+        
+        #make a box around the image
         glBegin(GL_LINES)
         glColor3f(1.0, 0, 0) #x in red
-        for line in self.x_axis:
-            glVertex3f(line[0][0], line[0][1], line[0][2])
-            glVertex3f(line[1][0], line[1][1], line[1][2])
+        glVertex3f(-.9, -.9, -.9)
+        glVertex3f(.9, -.9, -.9)
+        glVertex3f(-.9, .9, -.9)
+        glVertex3f(.9, .9, -.9)
+        glVertex3f(-.9, -.9, .9)
+        glVertex3f(.9, -.9, .9)
+        glVertex3f(-.9, .9, .9)
+        glVertex3f(.9, .9, .9)
         glColor3f(0,1.0, 0) #y in green
-        for line in self.y_axis:
-            glVertex3f(line[0][0], line[0][1], line[0][2])
-            glVertex3f(line[1][0], line[1][1], line[1][2])
+        glVertex3f(-.9, -.9, -.9)
+        glVertex3f(-.9, .9, -.9)
+        glVertex3f(.9, -.9, -.9)
+        glVertex3f(.9, .9, -.9)
+        glVertex3f(-.9, .9, .9)
+        glVertex3f(-.9, -.9, .9)
+        glVertex3f(.9, -.9, .9)
+        glVertex3f(.9, .9, .9)
         glColor3f(0,0,1.0) #z in blue
-        for line in self.z_axis:
-            glVertex3f(line[0][0], line[0][1], line[0][2])
-            glVertex3f(line[1][0], line[1][1], line[1][2])
-        glEnd() 
+        glVertex3f(-.9, -.9, -.9)
+        glVertex3f(-.9, -.9, .9)
+        glVertex3f(.9, -.9, -.9)
+        glVertex3f(.9, -.9, .9)
+        glVertex3f(-.9, .9, -.9)
+        glVertex3f(-.9, .9, .9)
+        glVertex3f(.9, .9, -.9)
+        glVertex3f(.9, .9, .9)
+        glEnd()
                 
         glColor3f(0.5, 0.5, 0.5)
-        
-        #10.0 gives reasonable font size
-        glScalef(10.0/self.columns, -10.0/self.rows, -10.0/self.layers)
+        #Get someone to explain to me why the inital size is so large
+        glScalef(.0005,.0005,.0005)
+        glTranslatef(-2000, 1830, 1800)
         glutStrokeString(GLUT_STROKE_ROMAN, "(0,0,0)")
-        glTranslatef(self.columns*self.columns/10.8, 0,0)
+        glTranslatef(3400, 0,0)
         glutStrokeString(GLUT_STROKE_ROMAN, "x=" + str(self.columns))
-        glTranslatef(-self.columns*self.columns/10.0, -self.rows*self.rows/10.0, 0)
+        glTranslatef(-3930, -3600, 0)
         glutStrokeString(GLUT_STROKE_ROMAN, "y=" + str(self.rows))
-        glTranslatef(0, self.rows*self.rows/10.0, -self.layers*self.layers/10.0)
+        glTranslatef(-350, 3600, -3600)
         glutStrokeString(GLUT_STROKE_ROMAN, "z=" + str(self.layers))
+        
+        glPopMatrix()
+        glEndList()
         
     def front_vertex(self, vertex):
         glVertex3f(*vertex)
@@ -277,15 +307,18 @@ class Viewer:
         gluLookAt(0, 0, 3, 0, 0, 2, 0,1,0)
         glMultMatrixd(self.arcball.matrix().T)
         
+        glCallList(1)#draw the box
+        
         if not pick:
-            #odd numbers for display
-            for idx in range(1, self.display_list_idx+1, 2):
+            #even numbers for display
+            for idx in range(2, self.display_list_idx+1, 2):
                 glCallList(idx)
             self.draw_marker()
+            glCallList(1)#draw the box
             glutSwapBuffers()
         else:
-            #even numbers for picking
-            for idx in range(2, self.display_list_idx+1, 2):
+            #odd numbers for picking
+            for idx in range(3, self.display_list_idx+1, 2):
                 glCallList(idx)
             glFlush()
                 
@@ -308,6 +341,10 @@ class Viewer:
     def keyboard(self, key, x, y):
         if key == chr(27): #escape to quit
             sys.exit()
+        if key == chr(8): #backspace to refresh/clear
+            self.refresh()
+        if key == chr(117):
+            self.undo()
         return
         
     def on_scroll(self, wheel, direction, x, y):
