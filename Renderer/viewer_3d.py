@@ -101,9 +101,13 @@ class Viewer:
         gluTessCallback(self.front_tesselator, GLU_TESS_END, glEnd)
         gluTessCallback(self.front_tesselator, GLU_TESS_VERTEX, self.front_vertex) 
         
+        glShadeModel(GL_SMOOTH)
         glEnable(GL_DEPTH_TEST)
-        #glEnable(GL_LIGHTING)
-        #glEnable(GL_LIGHT0)
+        glEnable(GL_LIGHTING)
+        glEnable(GL_LIGHT0)
+        glEnable(GL_NORMALIZE)
+        glColorMaterial(GL_FRONT_AND_BACK, GL_EMISSION)
+        glEnable(GL_COLOR_MATERIAL)
         
         glutDisplayFunc(self.draw)
         glutKeyboardFunc(self.keyboard)
@@ -120,7 +124,7 @@ class Viewer:
         self.win_h = h
         self.win_w = w
         glViewport(0,0, w,h)
-        self.arcball = self.create_arcball()
+        self.arcball.place([self.win_w/2, self.win_h/2], self.win_w/2)
             
     def on_idle(self):
             while(not self.in_q.empty()):
@@ -189,6 +193,7 @@ class Viewer:
     def make_back_list(self, contours):
         '''Creates a display list to encode color for image. Not seen by user'''
         glNewList(self.display_list_idx+1, GL_COMPILE)
+        glDisable(GL_LIGHTING)
         
         glMatrixMode(GL_MODELVIEW)
         glPushMatrix()
@@ -205,6 +210,8 @@ class Viewer:
         
         glPopMatrix()
         
+        glEnable(GL_LIGHTING)
+        
         glEndList()
         
     def make_front_list(self, contours, color, normals):
@@ -219,17 +226,17 @@ class Viewer:
         glScalef(1.8/self.columns, -1.8/self.rows, -1.8/self.layers)
         
         #draw the layers
-        #glMaterialfv(GL_FRONT_AND_BACK, GL_DIFFUSE, color) 
-        glColor3f(*color)
-        #for cnt, normal in zip(contours, normals):
-        for cnt in contours:
+        glMaterialfv(GL_FRONT_AND_BACK, GL_AMBIENT_AND_DIFFUSE, color)
+        #glMaterialfv(GL_FRONT_AND_BACK, GL_SPECULAR, color) 
+        #glColor3f(*color)
+        for cnt, normal in zip(contours, normals):
+        #for cnt in contours:
             gluTessBeginPolygon(self.front_tesselator, None)
             gluTessBeginContour(self.front_tesselator)
-            #for vtx, norm in zip(cnt, normal):
-            for vtx in cnt:    
-                #glNormal3d(*norm)
-                #print norm
-                gluTessVertex(self.front_tesselator, vtx, vtx)
+            for vtx, norm in zip(cnt, normal):
+            #for vtx in cnt:
+                norm /= np.linalg.norm(norm)
+                gluTessVertex(self.front_tesselator, vtx, [vtx, norm])
             gluTessEndContour(self.front_tesselator)
             gluTessEndPolygon(self.front_tesselator)
          
@@ -289,15 +296,16 @@ class Viewer:
         glPopMatrix()
         glEndList()
         
-    def front_vertex(self, vertex):
-        glVertex3f(*vertex)
+    def front_vertex(self, vert_norm):
+        glNormal3fv(vert_norm[1])
+        glVertex3fv(vert_norm[0])
         
     def back_vertex(self, vertex):
         '''sets the color of a single vertex and draws it'''
         #scale by dim-1 to include black 
         #multiply by -1 and add 1 to invert color axis
         glColor3f(1.0*vertex[0]/(self.columns-1), -1.0*vertex[1]/(self.rows-1)+1.0, -1.0*vertex[2]/(self.layers-1)+1.0)
-        glVertex3f(*vertex)
+        glVertex3fv(vertex)
         
     def draw(self, pick=False):
         '''draws an image'''
@@ -322,8 +330,7 @@ class Viewer:
             #odd numbers for picking
             for idx in range(3, self.display_list_idx+1, 2):
                 glCallList(idx)
-            glFlush()
-                
+            glFlush()   
       
         return
         

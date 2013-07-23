@@ -26,6 +26,7 @@ from pysqlite2 import dbapi2 as sqlite
 class Extractor:
     def __init__(self, out_q, directory, label_ids, location, max_x, max_y):
         
+        self.test_file = open(r'C:\Users\DanielMiron\rhoana\Rendering\test.txt', 'w')
         self.out_q = out_q
         
         self.directory = directory
@@ -79,6 +80,7 @@ class Extractor:
                 if contours != []:
                     self.out_q.put([contours, color, label_set[0], normals])
                     time.sleep(0.001)
+        self.test_file.close()
         
     def find_contours(self, label_ids, z_list):
         tot_contours = []
@@ -101,20 +103,11 @@ class Extractor:
                     
                     contours, hierarchy  = cv2.findContours(buffer_array, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
                     if not contours == []:
-                        
-                        '''mask = np.zeros(np.shape(labels))
-                        cv2.drawContours(mask, contours, -1, 1)
-                        blur_mask = sp.filters.gaussian_filter(mask,2)
-                        dx = np.zeros(np.shape(labels))
-                        dy = np.zeros(np.shape(labels))
-                        
-                        #dx[:, :-1] = blur_mask[:, 1:] - blur_mask[:, :-1]
-                        #dy[:-1, :] = blur_mask[1:, :] - blur_mask[:-1, :]
-                        dx[:, :-1] = mask[:, 1:] - mask[:, :-1]
-                        dy[:-1, :] = mask[1:, :] - mask[:-1, :]'''
+                        blur_mask = sp.filters.gaussian_filter(buffer_array.astype(float),11)
+                        dy, dx = np.gradient(blur_mask)
                         
                         contours = [np.array(cnt) for cnt in contours]
-                        #normals = [np.zeros(cnt.shape) for cnt in contours]
+                        normals = [np.zeros(cnt.shape) for cnt in contours]
                         for idx, cnt in enumerate(contours):
                             new_cnt = np.zeros((cnt.shape[0], 3))
                             
@@ -122,19 +115,19 @@ class Extractor:
                             new_cnt[:, 1] = cnt[:, 0, 1] - 1 + y*self.tile_rows
                             new_cnt[:, 2] = z
                             
-                            '''new_normal = np.zeros((cnt.shape[0], 3))
-                            new_normal[:,0] = dx[cnt[:,0,0]-1, cnt[:,0,1]-2]
-                            new_normal[:,1] = dy[cnt[:,0,0]-2, cnt[:,0,1]-1]
+                            new_normal = np.zeros((cnt.shape[0], 3))
+                            new_normal[:,0] = -dx[cnt[:,0,1], cnt[:,0,0]]
+                            new_normal[:,1] = -dy[cnt[:,0,1], cnt[:,0,0]]
+                            #print new_normal
                             #if np.any(new_normal!=0):
                             #    print new_normal
                             #leave z as 0 for now
                             
-                            normals[idx] = new_normal'''
+                            normals[idx] = new_normal
                             contours[idx] = new_cnt
                             
-                        #tot_normals += normals
+                        tot_normals += normals
                         tot_contours+=contours
-                
         return tot_contours, tot_normals
         
     def get_tile_list(self, label, z_list):
