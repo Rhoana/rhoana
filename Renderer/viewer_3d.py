@@ -221,10 +221,12 @@ class Viewer:
         #draw the layers
         #glMaterialfv(GL_FRONT_AND_BACK, GL_DIFFUSE, color) 
         glColor3f(*color)
-        for cnt, normal in zip(contours, normals):
+        #for cnt, normal in zip(contours, normals):
+        for cnt in contours:
             gluTessBeginPolygon(self.front_tesselator, None)
             gluTessBeginContour(self.front_tesselator)
-            for vtx, norm in zip(cnt, normal):
+            #for vtx, norm in zip(cnt, normal):
+            for vtx in cnt:    
                 #glNormal3d(*norm)
                 #print norm
                 gluTessVertex(self.front_tesselator, vtx, vtx)
