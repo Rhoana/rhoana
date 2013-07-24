@@ -349,11 +349,29 @@ class Viewer:
         glMatrixMode(GL_MODELVIEW)
         glPushMatrix()
         location = self.pick_location
-        glTranslatef(float(1.8*location[0])/self.columns-.9,
-                    -(float(1.8*location[1])/self.rows-.9),
-                    -(float(1.8*location[2])/self.layers-.9))
+        glTranslatef(1.8*location[0]/self.columns-.9,
+                    -(1.8*location[1]/self.rows-.9),
+                    -(1.8*location[2]/self.layers-.9))
         glColor3f(*self.marker_color)
         glutSolidSphere(.01, 50, 50)
+        
+        z = 1.8*location[2]/self.layers-.9
+        glBegin(GL_LINES)
+        glColor3f(1.0, 0, 0) #x in red
+        glVertex3f(-.9, -.9, z )
+        glVertex3f(.9, -.9, z)
+        glVertex3f(-.9, .9, z)
+        glVertex3f(.9, .9, z)
+        glColor3f(0,1.0, 0) #y in green
+        glVertex3f(-.9, -.9, z)
+        glVertex3f(-.9, .9, z)
+        glVertex3f(.9, -.9, z)
+        glVertex3f(.9, .9, z)
+        glVertex3f(-.9, .9, z)
+        glVertex3f(-.9, -.9, z)
+        glVertex3f(.9, -.9, z)
+        glVertex3f(.9, .9, z)
+        glEnd()
         
         glPopMatrix()
         

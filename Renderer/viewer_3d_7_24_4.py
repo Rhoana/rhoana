@@ -69,9 +69,6 @@ class Viewer:
         self.icon_color = np.array((0.0, 1.0, 0.0))
         self.st = time.time()
         
-        self.center_x = 0
-        self.center_y = 0
-        
     def set_dimensions(self, rows, columns, layers, w):
         self.rows = rows
         self.columns = columns
@@ -130,13 +127,6 @@ class Viewer:
         self.win_w = w
         glViewport(0,0, w,h)
         self.arcball.place([self.win_w/2, self.win_h/2], self.win_w/2)
-    
-    def translate(self, x, y):
-        print x, y, "x,y"
-        sys.stdout.flush()
-        self.center_x = self.center_x+(float(x/self.columns)-.5)*2
-        self.center_y = self.center_y-(float(y/self.rows)-.5)*2
-        #glViewport(x-self.win_w/2, y-self.win_h/2, x+self.win_w/2, y+self.win_h/2)
             
     def on_idle(self):
         while(not self.in_q.empty()):
@@ -339,7 +329,7 @@ class Viewer:
         glDrawBuffer(GL_BACK)
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)
         glLoadIdentity()
-        gluLookAt(self.center_x,self.center_y, 3, self.center_x, self.center_y, 2, 0,1,0)
+        gluLookAt(0, 0, 3, 0, 0, 2, 0,1,0)
         glMultMatrixd(self.arcball.matrix().T)
         
         glCallList(1)#draw the box and loading icon
@@ -404,8 +394,6 @@ class Viewer:
             self.refresh()
         if key == chr(117):
             self.undo()
-        if key == chr(116):
-            self.translate(x,y)
         return
         
     def on_scroll(self, wheel, direction, x, y):
