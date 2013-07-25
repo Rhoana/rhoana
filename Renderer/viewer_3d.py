@@ -501,7 +501,8 @@ class Viewer:
             self.left = False #turn off dragging rotation
             self.draw(pick=True)
             self.pick_location, self.marker_color, label = self.pick(x,y)
-            print self.pick_location, label #send the pick location to mojo
+            print self.pick_location#send the pick location to mojo
+            print label #send the label location to mojo
             sys.stdout.flush()
             self.has_marker = True
     
@@ -512,7 +513,6 @@ class Viewer:
         temp = glReadPixels(x,self.win_h-y, 1,1, GL_RGBA, GL_FLOAT)[0][0]
         click_color = temp[:3]
         label_idx = int(temp[3])
-        print self.label_dict.keys(), "keys"
         sys.stdout.flush()
         label = self.label_dict[label_idx]
         if np.all(click_color!=0):
