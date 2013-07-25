@@ -5,6 +5,8 @@
 #
 #Allows 3d viewing of nerve cord or neuron stacks.
 #Includes ability to fully rotate image in 3 dimensions and to mark locations in 3-space
+#
+#Version Date: 7/25 11:00
 #-------------------------
 
 import sys
@@ -47,8 +49,8 @@ class Viewer:
         
         self.directory = directory
         self.in_q =in_q
-        self.max_x = max_x
-        self.max_y = max_y
+        self.max_x = max_x #highest resolution
+        self.max_y = max_y #highest resolution
         
         self.rows = 0
         self.columns = 0
@@ -71,6 +73,9 @@ class Viewer:
         
         self.center_x = 0
         self.center_y = 0
+        
+        self.extractor_list = []
+        self.make_lists = True
         
     def set_dimensions(self, rows, columns, layers, w):
         self.rows = rows
@@ -134,8 +139,10 @@ class Viewer:
     def translate(self, x, y):
         print x, y, "x,y"
         sys.stdout.flush()
-        self.center_x = self.center_x+(float(x/self.columns)-.5)*2
-        self.center_y = self.center_y-(float(y/self.rows)-.5)*2
+        self.center_x = self.center_x+((float(x)/self.win_w)-.5)*2
+        self.center_y = self.center_y-((float(y)/self.win_h)-.5)*2
+        print self.center_x, self.center_y, "center"
+        sys.stdout.flush()
         #glViewport(x-self.win_w/2, y-self.win_h/2, x+self.win_w/2, y+self.win_h/2)
             
     def on_idle(self):
@@ -148,7 +155,8 @@ class Viewer:
                 color = temp[1]
                 primary_label = temp[2]
                 normals = temp[3]
-                self.make_display_lists(contours, color/255.0, primary_label, normals)
+                if self.make_lists:
+                    self.make_display_lists(contours, color/255.0, primary_label, normals)
                 self.draw()
             else:
                 #add new extractor
@@ -164,12 +172,14 @@ class Viewer:
                 ids = [primary_id + secondary_ids]
 
                 extr = extractor.Extractor(self.in_q, self.directory, ids, location, max_x, max_y)
+                self.extractor_list += [extr]
                 extracting_worker = threading.Thread(target = extr.run, name = "extr")
                 extracting_worker.daemon = True
                 extracting_worker.start()
             self.st = time.time()
-        if time.time()-self.st > 0.5:
+        if time.time()-self.st > 0.25:
             self.icon_color = np.array((0.0, 1.0, 0.0))
+            self.make_lists = True
         self.draw()
                 
     def loading_icon(self):
@@ -183,7 +193,11 @@ class Viewer:
     def refresh(self):
         #first display list is for the box
         glDeleteLists(2, self.display_list_idx)
+        self.in_q.queue.clear()
+        self.make_lists = False
         self.display_list_idx = 2
+        for extr in self.extractor_list:
+            extr.stop()
         self.draw()
     
     def undo(self):
@@ -262,7 +276,7 @@ class Viewer:
             #for vtx in cnt:
                 norm /= np.linalg.norm(norm)
                 #print norm
-                gluTessVertex(self.front_tesselator, vtx, [vtx, norm])
+                gluTessVertex(self.front_tesselator, vtx, [vtx, norm, color])
             gluTessEndContour(self.front_tesselator)
             gluTessEndPolygon(self.front_tesselator)
         
@@ -312,16 +326,24 @@ class Viewer:
         glRasterPos3f(-.9, .9, .9)
         glutBitmapString(GLUT_BITMAP_TIMES_ROMAN_24, "(0,0,0)")
         glRasterPos3f(.9, .9, .9)
-        glutBitmapString(GLUT_BITMAP_TIMES_ROMAN_24, "x=" + str(self.columns))
+        glutBitmapString(GLUT_BITMAP_TIMES_ROMAN_24, "x=" + str(self.columns-1))
         glRasterPos3f(-.9, -.9, .9)
-        glutBitmapString(GLUT_BITMAP_TIMES_ROMAN_24, "y= " + str(self.rows))
+        glutBitmapString(GLUT_BITMAP_TIMES_ROMAN_24, "y= " + str(self.rows-1))
         glRasterPos3f(-.9, .9, -.9)
-        glutBitmapString(GLUT_BITMAP_TIMES_ROMAN_24, "z= " + str(self.layers))
+        glutBitmapString(GLUT_BITMAP_TIMES_ROMAN_24, "z= " + str(self.layers-1))
         
         glPopMatrix()
         glEndList()
         
     def front_vertex(self, vert_norm):
+        if (vert_norm[0][0] == self.columns or vert_norm[0][0]==0):
+            glMaterialfv(GL_FRONT_AND_BACK, GL_AMBIENT_AND_DIFFUSE, (1,0,0))
+        elif (vert_norm[0][1] == self.rows or vert_norm[0][1] == 0):
+            glMaterialfv(GL_FRONT_AND_BACK, GL_AMBIENT_AND_DIFFUSE, (0,1,0))
+        elif (vert_norm[0][2] == self.layers-1 or vert_norm[0][2] == 0):
+            glMaterialfv(GL_FRONT_AND_BACK, GL_AMBIENT_AND_DIFFUSE, (0,0,1))
+        else:
+            glMaterialfv(GL_FRONT_AND_BACK, GL_AMBIENT_AND_DIFFUSE, vert_norm[2])
         glNormal3fv(vert_norm[1])
         glVertex3fv(vert_norm[0])
         
@@ -501,6 +523,7 @@ if __name__ == '__main__':
         
     extr = extractor.Extractor(display_queue, directory, ids, location, max_x, max_y)
     viewer  = Viewer(location, display_queue, directory, max_x, max_y)
+    viewer.extractor_list += [extr]
     handler = handler.Input_Handler(display_queue)
     
     viewer.set_dimensions(extr.rows, extr.columns, extr.layers, extr.w)

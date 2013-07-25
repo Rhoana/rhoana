@@ -3,6 +3,7 @@
 #Daniel Miron
 #7/17/2013
 #
+#Version Date: 7/25 11:00
 #--------------------
 
 import sys
@@ -61,6 +62,8 @@ class Extractor:
         self.pos_masks = []
         self.neg_masks = []
         
+        self.is_dead = False
+        
     def make_z_order(self, start_z):
         z_list = []
         z_list.append(start_z)
@@ -74,11 +77,16 @@ class Extractor:
             offset +=1
         return z_list
         
+    def stop(self):
+        self.is_dead = True
+        
     def run(self):
         for label_set in self.label_ids:
             color = self.color_map[label_set[0] % len(self.color_map)]
             #color = self.color_map[1]
             for z in self.z_order:
+                if self.is_dead:
+                    return
                 new_contours, new_normals, new_mask = self.find_contours(label_set, [z])
                 if new_contours != []:
                     self.out_q.put([new_contours, color, label_set[0], new_normals])
