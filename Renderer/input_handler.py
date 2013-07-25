@@ -3,7 +3,7 @@
 #Daniel Miron
 #719/13
 #
-#Version Date: 7/25 2:00
+#Version Date: 7/25 5:00
 #---------------------
 
 
@@ -14,7 +14,7 @@ import re
 
 class Input_Handler:
     def __init__(self, out_q):
-        self.out_q = out_q
+        self.out_q = out_q #queue to viewer
         
     def run(self):
         while True:
@@ -40,6 +40,7 @@ class Input_Handler:
                     self.out_q.put(["remove", ids]) 
                            
     def parse_ids(self, args):
+        '''reformat ids into a list with the primary id the first element'''
         primary_id = []
         secondary_ids = []
         split_str = re.split(":", args[0])

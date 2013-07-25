@@ -3,7 +3,7 @@
 #Daniel Miron
 #7/17/2013
 #
-#Version Date: 7/25 2:00
+#Version Date: 7/25 5:00
 #--------------------
 
 import sys
@@ -27,10 +27,10 @@ from pysqlite2 import dbapi2 as sqlite
 class Extractor:
     def __init__(self, out_q, directory, label_ids, location, max_x, max_y):
         
-        self.out_q = out_q
+        self.out_q = out_q #queue read by viewer
         
-        self.directory = directory
-        self.w = len(glob.glob(self.directory + "\\ids\\tiles\\*"))-1
+        self.directory = directory #mojo directory
+        self.w = len(glob.glob(self.directory + "\\ids\\tiles\\*"))-1 #default to lowest resolution
         self.w_str = "w={0:08}".format(self.w)
         self.label_folder = self.directory +"\\ids\\tiles\\" + self.w_str
         
@@ -48,7 +48,7 @@ class Extractor:
         
         self.rows = max_x/pow(2, self.w) - 1
         self.columns = max_y/pow(2, self.w) - 1
-        self.layers = len(self.z_folders)
+        self.layers = len(self.z_folders) #FIX THIS! not necessarily correct
         
         self.label_ids = label_ids
         

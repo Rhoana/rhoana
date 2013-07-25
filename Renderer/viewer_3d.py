@@ -6,7 +6,7 @@
 #Allows 3d viewing of nerve cord or neuron stacks.
 #Includes ability to fully rotate image in 3 dimensions and to mark locations in 3-space
 #
-#Version Date: 7/25 2:00
+#Version Date: 7/25 5:00
 #-------------------------
 
 import sys
@@ -61,8 +61,7 @@ class Viewer:
         self.fov = 60
         self.aspect = float(self.win_w)/self.win_h
         
-        self.left = None
-        self.slice = None
+        self.left = None #keep track of left button status
         self.pick_location = location
         
         self.display_list_idx = 2 #count from 1 and use first index for box
@@ -76,10 +75,14 @@ class Viewer:
         self.center_x = 0
         self.center_y = 0
         
-        self.extractor_dict = dict()
+        self.extractor_dict = dict() #keys are indices, values are extractor threads
         self.make_lists = True
         
+        self.num_labels = 0
+        self.label_dict = dict() #keys are float indices, values are labels
+        
     def set_dimensions(self, rows, columns, layers, w):
+        '''sets the dimensions of the viewing box'''
         self.rows = rows
         self.columns = columns
         self.layers = layers
@@ -87,7 +90,7 @@ class Viewer:
         
     def main(self):
         glutInit(sys.argv)
-        glutInitDisplayMode(GLUT_RGBA | GLUT_DOUBLE | GLUT_DEPTH)
+        glutInitDisplayMode(GLUT_RGBA | GLUT_DOUBLE | GLUT_DEPTH | GLUT_ALPHA)
         glutInitWindowSize(self.win_w, self.win_h) #width, height
         glutCreateWindow("3D View")
         
@@ -96,11 +99,13 @@ class Viewer:
         gluPerspective(self.fov, self.aspect, 1, 10)
         glMatrixMode(GL_MODELVIEW)
         
+        #tesselator for back color encoding
         self.back_tesselator = gluNewTess()
         gluTessCallback(self.back_tesselator, GLU_TESS_BEGIN, glBegin)
         gluTessCallback(self.back_tesselator, GLU_TESS_END, glEnd)
         gluTessCallback(self.back_tesselator, GLU_TESS_VERTEX, self.back_vertex)
         
+        #tesselator for actual drawing
         self.front_tesselator = gluNewTess()
         gluTessCallback(self.front_tesselator, GLU_TESS_BEGIN, glBegin)
         gluTessCallback(self.front_tesselator, GLU_TESS_END, glEnd)
@@ -126,19 +131,42 @@ class Viewer:
         return          
         
     def on_resize(self, w, h):
+        '''resize the viewing window'''
         self.win_h = h
         self.win_w = w
         glViewport(0,0, w,h)
         self.arcball.place([self.win_w/2, self.win_h/2], self.win_w/2)
     
     def translate(self, x, y):
-        print x, y, "x,y"
-        sys.stdout.flush()
+        '''translate the viewing box based on mouse location'''
         self.center_x = self.center_x+((float(x)/self.win_w)-.5)*2
         self.center_y = self.center_y-((float(y)/self.win_h)-.5)*2
-        print self.center_x, self.center_y, "center"
-        sys.stdout.flush()
-        #glViewport(x-self.win_w/2, y-self.win_h/2, x+self.win_w/2, y+self.win_h/2)
+    
+    def shift(self, key):
+        '''translate the viewing box based on keyboard input'''
+        if key == chr(105):
+            self.center_y +=float(self.fov)**2/10000
+        elif key == chr(106):
+            self.center_x +=float(self.fov)**2/10000
+        elif key == chr(107):
+            self.center_y -= float(self.fov)**2/10000
+        elif key == chr(108):
+            self.center_x -=float(self.fov)**2/10000
+            
+    def reset_translation(self):
+        '''reset the viewing box to 0 translation'''
+        self.center_x = 0
+        self.center_y = 0
+        self.draw()
+        
+    def reset_zoom(self):
+        '''reset the zoom level'''
+        self.fov = 60
+        self.draw()
+    
+    def reset(self):
+        self.reset_translation()
+        self.reset_zoom()
             
     def on_idle(self):
         while(not self.in_q.empty()):
@@ -148,12 +176,12 @@ class Viewer:
                 self.pick_location = temp[1:][0]
                 self.pick_location[0] = int(float(self.pick_location[0]*self.columns)/self.max_x)
                 self.pick_location[1] = int(float(self.pick_location[1]*self.rows)/self.max_y)
-                
                 self.draw_marker()
             elif temp[0] == "ids":
+                self.num_labels += 1
+                label_idx = self.num_labels
+                self.label_dict[label_idx] = temp[1:][0][0]
                 extr = extractor.Extractor(self.in_q, self.directory, temp[1:][0], self.pick_location, self.max_x, self.max_y)
-                print temp[1]
-                sys.stdout.flush()
                 self.extractor_dict[temp[1][0][0]] = extr
                 extracting_worker = threading.Thread(target = extr.run, name = "extr")
                 extracting_worker.daemon = True
@@ -175,6 +203,7 @@ class Viewer:
             elif temp[0] == "remove":
                 self.remove_label(temp[1:][0])
             self.st = time.time()
+        #set icon to green if processes are done
         if time.time()-self.st > 0.25:
             self.icon_color = np.array((0.0, 1.0, 0.0))
             self.make_lists = True
@@ -189,7 +218,9 @@ class Viewer:
         glEnd()
     
     def refresh(self):
+        '''Clears all contours and deletes working extractors'''
         #first display list is for the box
+        self.num_labels = 0
         glDeleteLists(2, self.display_list_idx)
         self.in_q.queue.clear()
         self.make_lists = False
@@ -205,6 +236,7 @@ class Viewer:
             self.draw()
             
     def remove_label(self, ids):
+        '''remove a single contour'''
         for display_list in self.display_list_dict[ids[0]]:
             glDeleteLists(display_list, 1)
             self.extractor_dict[ids[0]].stop()
@@ -217,7 +249,8 @@ class Viewer:
         return arcball
         
     def make_display_lists(self, contours, color, label, normals):
-        if self.first:
+        '''Generates display lists to draw both the front and back buffered images'''
+        if self.first: #make the box 
             display_list = glGenLists(1)
             self.axes()
             self.make_box_list()
@@ -228,13 +261,15 @@ class Viewer:
         else:
             self.display_list_dict[label] = [self.display_list_idx, self.display_list_idx+1]
         self.make_front_list(contours, color, normals)
-        self.make_back_list(contours)
+        label_idx = self.num_labels
+        sys.stdout.flush()
+        self.make_back_list(contours, label_idx)
         self.display_list_idx +=2
         
-    def make_back_list(self, contours):
+    def make_back_list(self, contours, label_idx):
         '''Creates a display list to encode color for image. Not seen by user'''
         glNewList(self.display_list_idx+1, GL_COMPILE)
-        glDisable(GL_LIGHTING)
+        glDisable(GL_LIGHTING) #don't use lighting for color encoding
         
         glMatrixMode(GL_MODELVIEW)
         glPushMatrix()
@@ -245,7 +280,7 @@ class Viewer:
             gluTessBeginPolygon(self.back_tesselator, None)
             gluTessBeginContour(self.back_tesselator)
             for vtx in cnt:
-                gluTessVertex(self.back_tesselator, vtx, vtx)
+                gluTessVertex(self.back_tesselator, vtx, [vtx, label_idx])
             gluTessEndContour(self.back_tesselator)
             gluTessEndPolygon(self.back_tesselator)
         
@@ -271,13 +306,10 @@ class Viewer:
         #glMaterialfv(GL_FRONT_AND_BACK, GL_SPECULAR, color) 
         #glColor3f(*color)
         for cnt, normal in zip(contours, normals):
-        #for cnt in contours:
             gluTessBeginPolygon(self.front_tesselator, None)
             gluTessBeginContour(self.front_tesselator)
             for vtx, norm in zip(cnt, normal):
-            #for vtx in cnt:
                 norm /= np.linalg.norm(norm)
-                #print norm
                 gluTessVertex(self.front_tesselator, vtx, [vtx, norm, color])
             gluTessEndContour(self.front_tesselator)
             gluTessEndPolygon(self.front_tesselator)
@@ -287,6 +319,7 @@ class Viewer:
         glEndList()
         
     def make_box_list(self):
+        '''makes a display list to draw the box'''
         glNewList(1, GL_COMPILE)
         
         glMatrixMode(GL_MODELVIEW)
@@ -338,6 +371,8 @@ class Viewer:
         glEndList()
         
     def front_vertex(self, vert_norm):
+        '''draws a vertex for the front image'''
+        #if the vertex is an edge vertex color it differently
         if (vert_norm[0][0] == self.columns or vert_norm[0][0]==0):
             glMaterialfv(GL_FRONT_AND_BACK, GL_AMBIENT_AND_DIFFUSE, (1,0,0))
         elif (vert_norm[0][1] == self.rows or vert_norm[0][1] == 0):
@@ -349,16 +384,20 @@ class Viewer:
         glNormal3fv(vert_norm[1])
         glVertex3fv(vert_norm[0])
         
-    def back_vertex(self, vertex):
+    def back_vertex(self, vert_label):
         '''sets the color of a single vertex and draws it'''
         #scale by dim-1 to include black 
         #multiply by -1 and add 1 to invert color axis
-        glColor3f(1.0*vertex[0]/(self.columns-1), -1.0*vertex[1]/(self.rows-1)+1.0, -1.0*vertex[2]/(self.layers-1)+1.0)
+        vertex = vert_label[0]
+        sys.stdout.flush()
+        glColor4f(1.0*vertex[0]/(self.columns-1), -1.0*vertex[1]/(self.rows-1)+1.0, -1.0*vertex[2]/(self.layers-1)+1.0, vert_label[1])
         glVertex3fv(vertex)
         
     def draw(self, pick=False):
         '''draws an image'''
-        
+        glMatrixMode(GL_PROJECTION)
+        glLoadIdentity()
+        gluPerspective(self.fov, self.aspect, 1, 10)
         glMatrixMode(GL_MODELVIEW)
         glDrawBuffer(GL_BACK)
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)
@@ -377,7 +416,6 @@ class Viewer:
             for idx in range(2, self.display_list_idx+1, 2):
                 glCallList(idx)
             self.draw_marker()
-            #glCallList(1)#draw the box
             glutSwapBuffers()
         else:
             #odd numbers for picking
@@ -401,6 +439,7 @@ class Viewer:
         glutSolidSphere(.01, 50, 50)
         glTranslatef(-(1.8*location[0]/self.columns-.9), (1.8*location[1]/self.rows-.9),0)
         
+        #draw a square parellel to z plane at z level of marker
         glBegin(GL_LINES)
         glColor3f(1.0, 1.0, 1.0)
         glVertex3f(-.9, -.9, 0)
@@ -427,27 +466,29 @@ class Viewer:
             sys.exit()
         if key == chr(8): #backspace to refresh/clear
             self.refresh()
-        if key == chr(117):
+        if key == chr(117): #u to undo
             self.undo()
-        if key == chr(116):
+        if key == chr(116): #t to translate to mouse location
             self.translate(x,y)
+        if key == chr(99): #c to center the box
+            self.reset_translation()
+        if (key == chr(105) or key == chr(106) or key == chr(107) or key == chr(108)): #i, j, k, l to translate by increment
+            self.shift(key)
+        if (key == chr(114)): #r to reset the translation and zoom
+            self.reset()
+        if (key == chr(122)): #z to reset the zoom
+            self.reset_zoom()
+            
         return
         
     def on_scroll(self, wheel, direction, x, y):
         '''zooms in and out on mouse scroll wheel'''
         if direction == 1:
-            glMatrixMode(GL_PROJECTION)
-            glLoadIdentity()
             self.fov = self.fov - 1
-            gluPerspective(self.fov, 1, 1, 10)
             self.draw()
         else:
-            glMatrixMode(GL_PROJECTION)
-            glLoadIdentity()
             self.fov = self.fov + 1
-            gluPerspective(self.fov, 1, 1, 10)
             self.draw()
-            return
         
         
     def on_click(self, button, state, x, y):
@@ -459,8 +500,8 @@ class Viewer:
         elif (button == GLUT_RIGHT_BUTTON and state == GLUT_DOWN):
             self.left = False #turn off dragging rotation
             self.draw(pick=True)
-            self.pick_location, self.marker_color = self.pick(x,y)
-            print self.pick_location
+            self.pick_location, self.marker_color, label = self.pick(x,y)
+            print self.pick_location, label #send the pick location to mojo
             sys.stdout.flush()
             self.has_marker = True
     
@@ -468,15 +509,20 @@ class Viewer:
         '''gets the (x,y,z) location in the full volume of a chosen pixel'''
         click_color = None
         glReadBuffer(GL_BACK)
-        click_color = glReadPixels(x,self.win_h-y, 1,1, GL_RGB, GL_FLOAT)[0][0]
+        temp = glReadPixels(x,self.win_h-y, 1,1, GL_RGBA, GL_FLOAT)[0][0]
+        click_color = temp[:3]
+        label_idx = int(temp[3])
+        print self.label_dict.keys(), "keys"
+        sys.stdout.flush()
+        label = self.label_dict[label_idx]
         if np.all(click_color!=0):
             location  = [int(click_color[0]*(self.columns-1)), 
                         int(-(click_color[1]-1)*(self.rows-1)), int(-(click_color[2]-1)*((self.layers-1)))]
             glReadBuffer(GL_FRONT)
             marker_color_neg = glReadPixels(x,self.win_h-y, 1,1, GL_RGB, GL_FLOAT)[0][0]
             marker_color = 1-marker_color_neg
-            return location, marker_color
-        return self.pick_location, self.marker_color
+            return location, marker_color, label
+        return self.pick_location, self.marker_color, label
         
     def on_drag(self, x, y):
         '''rotates image on dragging with left mouse down'''
@@ -512,7 +558,6 @@ if __name__ == '__main__':
     directory = sys.argv[0]
     
     location = (int(sys.argv[1]), int(sys.argv[2]), int(sys.argv[3])) #x,y,z
-    #resolution_level = int(sys.argv[4]) #w
     max_x =int(sys.argv[4])
     max_y = int(sys.argv[5])
     
@@ -532,6 +577,8 @@ if __name__ == '__main__':
     handler = handler.Input_Handler(display_queue)
     
     viewer.set_dimensions(extr.rows, extr.columns, extr.layers, extr.w)
+    
+    viewer.label_dict[0/255.0] = ids[0][0]
     
     extracting_worker = threading.Thread(target = extr.run, name = "extr")
     input_worker = threading.Thread(target = handler.run, name = "input_worker")
