@@ -6,7 +6,7 @@
 #Allows 3d viewing of nerve cord or neuron stacks.
 #Includes ability to fully rotate image in 3 dimensions and to mark locations in 3-space
 #
-#Version Date: 7/25 11:00
+#Version Date: 7/25 2:00
 #-------------------------
 
 import sys
@@ -45,7 +45,9 @@ except AttributeError:
 class Viewer:
     def __init__(self, location, in_q, directory, max_x, max_y):
         self.st = time.time()
-        self.arcball = None
+        self.win_h = 1000
+        self.win_w = 1000
+        self.arcball = self.create_arcball()
         
         self.directory = directory
         self.in_q =in_q
@@ -56,8 +58,8 @@ class Viewer:
         self.columns = 0
         self.layers = 0
         
-        self.win_h = 0
-        self.win_w = 0
+        self.fov = 60
+        self.aspect = float(self.win_w)/self.win_h
         
         self.left = None
         self.slice = None
@@ -74,7 +76,7 @@ class Viewer:
         self.center_x = 0
         self.center_y = 0
         
-        self.extractor_list = []
+        self.extractor_dict = dict()
         self.make_lists = True
         
     def set_dimensions(self, rows, columns, layers, w):
@@ -84,12 +86,6 @@ class Viewer:
         self.pick_location = (self.pick_location[0]/pow(2, w) - 1, self.pick_location[1]/pow(2, w) - 1, self.pick_location[2])
         
     def main(self):
-        #self.contours = self.load_contours(contour_file)
-        #set window height and width
-        self.win_h = 1000
-        self.win_w = 1000
-        self.arcball = self.create_arcball()
-        
         glutInit(sys.argv)
         glutInitDisplayMode(GLUT_RGBA | GLUT_DOUBLE | GLUT_DEPTH)
         glutInitWindowSize(self.win_w, self.win_h) #width, height
@@ -97,8 +93,7 @@ class Viewer:
         
         glMatrixMode(GL_PROJECTION)
         glLoadIdentity()
-        gluPerspective(65, 1, 1, 10)
-        self.fov = 65
+        gluPerspective(self.fov, self.aspect, 1, 10)
         glMatrixMode(GL_MODELVIEW)
         
         self.back_tesselator = gluNewTess()
@@ -149,33 +144,36 @@ class Viewer:
         while(not self.in_q.empty()):
             self.icon_color = (self.icon_color + .01)%1 #resets to black when icon is green since 1.0 and 0.0 %1 are equal
             temp = self.in_q.get()
-            if type(temp) is list:
-                #draw contours
-                contours =  temp[0]
-                color = temp[1]
-                primary_label = temp[2]
-                normals = temp[3]
-                if self.make_lists:
-                    self.make_display_lists(contours, color/255.0, primary_label, normals)
-                self.draw()
-            else:
-                #add new extractor
-                args = temp.split()
-                location = (int(args[0]), int(args[1]), int(args[2]))
+            if temp[0] == "marker":
+                self.pick_location = temp[1:][0]
+                self.pick_location[0] = int(float(self.pick_location[0]*self.columns)/self.max_x)
+                self.pick_location[1] = int(float(self.pick_location[1]*self.rows)/self.max_y)
                 
-                primary_id = []
-                secondary_ids = []
-                split_str = re.split(":", args[3])
-                primary_id = [int(split_str[0])]
-                if split_str[1] != "":
-                    secondary_ids = [int(label) for label in re.split(',', split_str[1])]
-                ids = [primary_id + secondary_ids]
-
-                extr = extractor.Extractor(self.in_q, self.directory, ids, location, max_x, max_y)
-                self.extractor_list += [extr]
+                self.draw_marker()
+            elif temp[0] == "ids":
+                extr = extractor.Extractor(self.in_q, self.directory, temp[1:][0], self.pick_location, self.max_x, self.max_y)
+                print temp[1]
+                sys.stdout.flush()
+                self.extractor_dict[temp[1][0][0]] = extr
                 extracting_worker = threading.Thread(target = extr.run, name = "extr")
                 extracting_worker.daemon = True
                 extracting_worker.start()
+            elif temp[0] == "contours":
+                contours =  temp[1]
+                color = temp[2]
+                primary_label = temp[3]
+                normals = temp[4]
+                if self.make_lists:
+                    self.make_display_lists(contours, color/255.0, primary_label, normals)
+                self.draw()
+            elif temp[0] == "limits":
+                self.max_x= temp[1]
+                self.max_y = temp[2]
+                self.layers = temp[3]
+            elif temp[0] == "refresh":
+                self.refresh()
+            elif temp[0] == "remove":
+                self.remove_label(temp[1:][0])
             self.st = time.time()
         if time.time()-self.st > 0.25:
             self.icon_color = np.array((0.0, 1.0, 0.0))
@@ -184,10 +182,10 @@ class Viewer:
                 
     def loading_icon(self):
         glBegin(GL_QUADS)
-        glVertex3f(-.975, .975, 1.0)
-        glVertex3f(-.925, .975, 1.0)
-        glVertex3f(-.925, .925, 1.0)
-        glVertex3f(-.975, .925, 1.0)
+        glVertex3f(-1.0, -1.0, 1.0)
+        glVertex3f(-.95, -1.0, 1.0)
+        glVertex3f(-.95, -.95, 1.0)
+        glVertex3f(-1.0, -.95, 1.0)
         glEnd()
     
     def refresh(self):
@@ -196,16 +194,20 @@ class Viewer:
         self.in_q.queue.clear()
         self.make_lists = False
         self.display_list_idx = 2
-        for extr in self.extractor_list:
-            extr.stop()
+        for key in self.extractor_dict.keys():
+            self.extractor_dict[key].stop()
         self.draw()
     
     def undo(self):
         label = self.display_list_dict.keys()[0]
         for display_list in self.display_list_dict[label]:
-            sys.stdout.flush()
             glDeleteLists(display_list, 1) #delete back and front lists
-            self.display_list_idx
+            self.draw()
+            
+    def remove_label(self, ids):
+        for display_list in self.display_list_dict[ids[0]]:
+            glDeleteLists(display_list, 1)
+            self.extractor_dict[ids[0]].stop()
             self.draw()
         
     def create_arcball(self):
@@ -362,12 +364,13 @@ class Viewer:
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)
         glLoadIdentity()
         gluLookAt(self.center_x,self.center_y, 3, self.center_x, self.center_y, 2, 0,1,0)
-        glMultMatrixd(self.arcball.matrix().T)
         
-        glCallList(1)#draw the box and loading icon
+        #Draw icon after rotating
         glColor3fv(self.icon_color)
         self.loading_icon()
         glColor3f(0.0, 0.0, 0.0)
+        glMultMatrixd(self.arcball.matrix().T)
+        glCallList(1)#draw the box and loading icon
         
         if not pick:
             #even numbers for display
@@ -466,12 +469,14 @@ class Viewer:
         click_color = None
         glReadBuffer(GL_BACK)
         click_color = glReadPixels(x,self.win_h-y, 1,1, GL_RGB, GL_FLOAT)[0][0]
-        location  = [int(click_color[0]*(self.columns-1)), 
-                    int(-(click_color[1]-1)*(self.rows-1)), int(-(click_color[2]-1)*((self.layers-1)))]
-        glReadBuffer(GL_FRONT)
-        marker_color_neg = glReadPixels(x,self.win_h-y, 1,1, GL_RGB, GL_FLOAT)[0][0]
-        marker_color = 1-marker_color_neg
-        return location, marker_color
+        if np.all(click_color!=0):
+            location  = [int(click_color[0]*(self.columns-1)), 
+                        int(-(click_color[1]-1)*(self.rows-1)), int(-(click_color[2]-1)*((self.layers-1)))]
+            glReadBuffer(GL_FRONT)
+            marker_color_neg = glReadPixels(x,self.win_h-y, 1,1, GL_RGB, GL_FLOAT)[0][0]
+            marker_color = 1-marker_color_neg
+            return location, marker_color
+        return self.pick_location, self.marker_color
         
     def on_drag(self, x, y):
         '''rotates image on dragging with left mouse down'''
@@ -523,7 +528,7 @@ if __name__ == '__main__':
         
     extr = extractor.Extractor(display_queue, directory, ids, location, max_x, max_y)
     viewer  = Viewer(location, display_queue, directory, max_x, max_y)
-    viewer.extractor_list += [extr]
+    viewer.extractor_dict[ids[0][0]] = extr
     handler = handler.Input_Handler(display_queue)
     
     viewer.set_dimensions(extr.rows, extr.columns, extr.layers, extr.w)

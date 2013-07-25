@@ -3,7 +3,7 @@
 #Daniel Miron
 #7/17/2013
 #
-#Version Date: 7/25 11:00
+#Version Date: 7/25 2:00
 #--------------------
 
 import sys
@@ -89,7 +89,7 @@ class Extractor:
                     return
                 new_contours, new_normals, new_mask = self.find_contours(label_set, [z])
                 if new_contours != []:
-                    self.out_q.put([new_contours, color, label_set[0], new_normals])
+                    self.out_q.put(["contours", new_contours, color, label_set[0], new_normals])
                     '''if ((len(self.pos_masks)<=2) and z >= self.start_z):
                         self.pos_masks += [[new_contours, new_normals, new_mask]]
                     elif (z>=self.start_z):
