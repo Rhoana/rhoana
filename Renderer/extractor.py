@@ -3,7 +3,7 @@
 #Daniel Miron
 #7/17/2013
 #
-#Version Date: 7/25 5:00
+#Version Date: 7/26 10:30
 #--------------------
 
 import sys
@@ -25,7 +25,7 @@ import scipy.ndimage as sp
 from pysqlite2 import dbapi2 as sqlite
 
 class Extractor:
-    def __init__(self, out_q, directory, label_ids, location, max_x, max_y):
+    def __init__(self, out_q, directory, label_ids, location, max_x, max_y, extractor_idx):
         
         self.out_q = out_q #queue read by viewer
         
@@ -35,7 +35,7 @@ class Extractor:
         self.label_folder = self.directory +"\\ids\\tiles\\" + self.w_str
         
         self.segment_file = self.directory + "\\ids\\segmentInfo.db"
-        self.z_folders = glob.glob(self.label_folder + "\\*")
+        self.z_folders = sorted(glob.glob(self.label_folder + "\\*"))
         h5_file = h5py.File(glob.glob(self.z_folders[0] + "\\*")[0], "r")
         self.label_key = h5_file.keys()[0]
         self.shape = np.shape(h5_file[self.label_key][...])
@@ -48,7 +48,7 @@ class Extractor:
         
         self.rows = max_x/pow(2, self.w) - 1
         self.columns = max_y/pow(2, self.w) - 1
-        self.layers = len(self.z_folders) #FIX THIS! not necessarily correct
+        self.layers = int(os.path.basename(str(self.z_folders[-1])).split("0")[-1])+1
         
         self.label_ids = label_ids
         
@@ -63,6 +63,8 @@ class Extractor:
         self.neg_masks = []
         
         self.is_dead = False
+        
+        self.idx = extractor_idx
         
     def make_z_order(self, start_z):
         z_list = []
@@ -89,7 +91,7 @@ class Extractor:
                     return
                 new_contours, new_normals, new_mask = self.find_contours(label_set, [z])
                 if new_contours != []:
-                    self.out_q.put(["contours", new_contours, color, label_set[0], new_normals])
+                    self.out_q.put(["contours", new_contours, color, label_set[0], new_normals, self.idx])
                     '''if ((len(self.pos_masks)<=2) and z >= self.start_z):
                         self.pos_masks += [[new_contours, new_normals, new_mask]]
                     elif (z>=self.start_z):
