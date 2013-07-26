@@ -280,19 +280,29 @@ class Viewer:
         glTranslatef(-.9, .9, .9)
         glScalef(1.8/self.columns, -1.8/self.rows, -1.8/self.layers)
         #draw the layers
+
+        glEnableClientState(GL_VERTEX_ARRAY)
+        glEnableClientState(GL_COLOR_ARRAY)
         for cnt in contours:
-            glBegin(GL_TRIANGLE_STRIP)
-            for vertex in cnt:
-                glColor4f(1.0*vertex[0]/(self.columns-1), -1.0*vertex[1]/(self.rows-1)+1.0, -1.0*vertex[2]/(self.layers-1)+1.0, label_idx)
-                glVertex3fv(vertex)
-            glEnd()
+            colors = np.zeros((cnt.shape[0], 4), np.float)
+            colors[:, :3] = cnt
+            colors[:, 0] /= self.columns - 1
+            colors[:, 1] /= - (self.rows - 1)
+            colors[:, 2] /= - (self.layers - 1)
+            colors[:, 1:3] += 1
+            colors[:, 3] = label_idx
+            glVertexPointer(3, GL_INT, 0, cnt)
+            glColorPointer(4, GL_FLOAT, 0, colors)
+            glDrawArrays(GL_TRIANGLE_STRIP, 0, cnt.shape[0])
+        glDisableClientState(GL_VERTEX_ARRAY)
+        glDisableClientState(GL_COLOR_ARRAY)
 
         glPopMatrix()
-        
+
         glEnable(GL_LIGHTING)
-        
+
         glEndList()
-        
+
     def make_front_list(self, contours, color, normals):
         '''Creates a display list to draw a box and the data scaled to .9*the size of the window.
         This list deals with the display seen by the user'''
@@ -306,25 +316,27 @@ class Viewer:
         
         #draw the layers
         glMaterialfv(GL_FRONT_AND_BACK, GL_AMBIENT_AND_DIFFUSE, color)
-        #glMaterialfv(GL_FRONT_AND_BACK, GL_SPECULAR, color) 
-        #glColor3f(*color)
+        glEnableClientState(GL_VERTEX_ARRAY)
+        glEnableClientState(GL_NORMAL_ARRAY)
+        glEnableClientState(GL_COLOR_ARRAY)
         for cnt, normal in zip(contours, normals):
-            glBegin(GL_TRIANGLE_STRIP)
-            for v, n in zip(cnt, normal):
-                if (v[0] == self.columns or v[0]==0):
-                    glMaterialfv(GL_FRONT_AND_BACK, GL_AMBIENT_AND_DIFFUSE, (1,0,0))
-                elif (v[1] == self.rows or v[1] == 0):
-                    glMaterialfv(GL_FRONT_AND_BACK, GL_AMBIENT_AND_DIFFUSE, (0,1,0))
-                elif (v[2] == self.layers-1 or v[2] == 0):
-                    glMaterialfv(GL_FRONT_AND_BACK, GL_AMBIENT_AND_DIFFUSE, (0,0,1))
-                else:
-                    glMaterialfv(GL_FRONT_AND_BACK, GL_AMBIENT_AND_DIFFUSE, color)
-                glNormal3fv(n)
-                glVertex3fv(v)
-            glEnd()
+            colors = np.zeros_like(normal)
+            colors[...] = np.array(color)
+            colors[cnt[:, 0] == self.columns, :] = np.array([1, 0, 0])
+            colors[cnt[:, 0] == 0, :] = np.array([1, 0, 0])
+            colors[cnt[:, 1] == self.rows, :] = np.array([0, 1, 0])
+            colors[cnt[:, 1] == 0, :] = np.array([0, 1, 0])
+            colors[cnt[:, 2] == self.layers - 1, :] = np.array([0, 1, 1])
+            colors[cnt[:, 2] == 0, :] = np.array([0, 1, 1])
+            glVertexPointer(3, GL_INT, 0, cnt)
+            glNormalPointer(GL_FLOAT, 0, normal)
+            glColorPointer(3, GL_FLOAT, 0, colors)
+            glDrawArrays(GL_TRIANGLE_STRIP, 0, cnt.shape[0])
+        glDisableClientState(GL_VERTEX_ARRAY)
+        glDisableClientState(GL_NORMAL_ARRAY)
+        glDisableClientState(GL_COLOR_ARRAY)
 
         glPopMatrix()
-
         glEndList()
 
     def make_box_list(self):
