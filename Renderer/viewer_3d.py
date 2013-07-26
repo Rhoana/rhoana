@@ -103,18 +103,6 @@ class Viewer:
         gluPerspective(self.fov, self.aspect, 1, 10)
         glMatrixMode(GL_MODELVIEW)
         
-        #tesselator for back color encoding
-        self.back_tesselator = gluNewTess()
-        gluTessCallback(self.back_tesselator, GLU_TESS_BEGIN, glBegin)
-        gluTessCallback(self.back_tesselator, GLU_TESS_END, glEnd)
-        gluTessCallback(self.back_tesselator, GLU_TESS_VERTEX, self.back_vertex)
-        
-        #tesselator for actual drawing
-        self.front_tesselator = gluNewTess()
-        gluTessCallback(self.front_tesselator, GLU_TESS_BEGIN, glBegin)
-        gluTessCallback(self.front_tesselator, GLU_TESS_END, glEnd)
-        gluTessCallback(self.front_tesselator, GLU_TESS_VERTEX, self.front_vertex) 
-        
         glShadeModel(GL_SMOOTH)
         glEnable(GL_DEPTH_TEST)
         glEnable(GL_LIGHTING)
@@ -176,7 +164,8 @@ class Viewer:
         self.reset_zoom()
             
     def on_idle(self):
-        while(not self.in_q.empty()):
+        timer = time.time()
+        while(not self.in_q.empty() and time.time()-timer<.1):
             self.icon_color = (self.icon_color + .01)%1 #resets to black when icon is green since 1.0 and 0.0 %1 are equal
             temp = self.in_q.get()
             if temp[0] == "marker":
@@ -394,29 +383,6 @@ class Viewer:
         glPopMatrix()
         glEndList()
         
-    def front_vertex(self, vert_norm):
-        '''draws a vertex for the front image'''
-        #if the vertex is an edge vertex color it differently
-        if (vert_norm[0][0] == self.columns or vert_norm[0][0]==0):
-            glMaterialfv(GL_FRONT_AND_BACK, GL_AMBIENT_AND_DIFFUSE, (1,0,0))
-        elif (vert_norm[0][1] == self.rows or vert_norm[0][1] == 0):
-            glMaterialfv(GL_FRONT_AND_BACK, GL_AMBIENT_AND_DIFFUSE, (0,1,0))
-        elif (vert_norm[0][2] == self.layers-1 or vert_norm[0][2] == 0):
-            glMaterialfv(GL_FRONT_AND_BACK, GL_AMBIENT_AND_DIFFUSE, (0,0,1))
-        else:
-            glMaterialfv(GL_FRONT_AND_BACK, GL_AMBIENT_AND_DIFFUSE, vert_norm[2])
-        glNormal3fv(vert_norm[1])
-        glVertex3fv(vert_norm[0])
-        
-    def back_vertex(self, vert_label):
-        '''sets the color of a single vertex and draws it'''
-        #scale by dim-1 to include black 
-        #multiply by -1 and add 1 to invert color axis
-        vertex = vert_label[0]
-        sys.stdout.flush()
-        glColor4f(1.0*vertex[0]/(self.columns-1), -1.0*vertex[1]/(self.rows-1)+1.0, -1.0*vertex[2]/(self.layers-1)+1.0, vert_label[1]/255.0)
-        glVertex3fv(vertex)
-        
     def draw(self, pick=False):
         '''draws an image'''
         glMatrixMode(GL_PROJECTION)
@@ -480,12 +446,15 @@ class Viewer:
         glVertex3f(.9, .9, 0)
         glEnd()
         
+        glColor3f(1.0, 0, 0)
+        
         glRasterPos(.9, .9, 0)
         glutBitmapString(GLUT_BITMAP_TIMES_ROMAN_24, "z= " + str(location[2]))
         
         glPopMatrix()
         
     def keyboard(self, key, x, y):
+        key = key.lower()
         if key == chr(27): #escape to quit
             sys.exit()
         if key == chr(8): #backspace to refresh/clear
@@ -546,16 +515,6 @@ class Viewer:
         if self.left:
             self.arcball.drag((x,y))
             glutPostRedisplay()
-        
-    def read_chunk_map(self, chunk_file):
-        return pickle.load(open(chunk_file, "rb"))
-        
-    def save_contours(self, contour_file):
-        pickle.dump(self.contours, open(contour_file, "wb"))
-        return
-        
-    def load_contours(self, contour_file):
-        return pickle.load(open(contour_file, "rb"))
         
     def axes(self):
         '''generates vertices for a box'''

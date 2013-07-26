@@ -107,18 +107,6 @@ class Extractor:
                 new_contours, new_normals, new_mask = self.find_contours(label_set, [z])
                 if new_contours != []:
                     self.out_q.put(["contours", new_contours, color, label_set[0], new_normals, self.idx])
-                    '''if ((len(self.pos_masks)<=2) and z >= self.start_z):
-                        self.pos_masks += [[new_contours, new_normals, new_mask]]
-                    elif (z>=self.start_z):
-                        contours, normals = self.get_z_normals(1)
-                        self.pos_masks = self.pos_masks[1:] + [[new_contours, new_normals, new_mask]] #ascending z order
-                        self.out_q.put([contours, color, label_set[0], normals])
-                    if ((len(self.neg_masks)<=2) and z<= self.start_z):
-                        self.neg_masks += [[new_contours, new_normals, new_mask]]
-                    elif (z<=self.start_z):
-                        contours, normals = self.get_z_normals(-1)
-                        self.neg_masks = self.neg_masks[1:] + [[new_contours, new_normals, new_mask]] #descending z order
-                        self.out_q.put([contours, color, label_set[0], normals])'''
         
     def get_z_normals(self, sign):
         if sign >0:
