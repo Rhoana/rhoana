@@ -26,6 +26,10 @@ from Queue import Queue
 from OpenGL.GLUT import *
 from OpenGL.GLU import *
 from OpenGL.GL import *
+try:
+    from OpenGL.GLUT.freeglut import *
+except Exception:
+    pass
 import arcball as arc
 
 from pysqlite2 import dbapi2 as sqlite
@@ -158,12 +162,12 @@ class Viewer:
         '''reset the viewing box to 0 translation'''
         self.center_x = 0
         self.center_y = 0
-        self.draw()
+        glutPostRedisplay()
         
     def reset_zoom(self):
         '''reset the zoom level'''
         self.fov = 60
-        self.draw()
+        glutPostRedisplay()
     
     def reset(self):
         self.reset_translation()
@@ -177,7 +181,6 @@ class Viewer:
                 self.pick_location = temp[1:][0]
                 self.pick_location[0] = int(float(self.pick_location[0]*self.columns)/self.max_x)
                 self.pick_location[1] = int(float(self.pick_location[1]*self.rows)/self.max_y)
-                self.draw_marker()
             elif temp[0] == "ids":
                 self.num_labels += 1
                 label_idx = self.num_labels
@@ -195,7 +198,6 @@ class Viewer:
                 label_idx = temp[5]
                 if self.make_lists:
                     self.make_display_lists(contours, color/255.0, primary_label, normals, label_idx)
-                self.draw()
             elif temp[0] == "limits":
                 self.max_x= temp[1]
                 self.max_y = temp[2]
@@ -205,11 +207,13 @@ class Viewer:
             elif temp[0] == "remove":
                 self.remove_label(temp[1:][0])
             self.st = time.time()
+            glutPostRedisplay()
         #set icon to green if processes are done
         if time.time()-self.st > 0.25:
             self.icon_color = np.array((0.0, 1.0, 0.0))
             self.make_lists = True
-        self.draw()
+            glutPostRedisplay()
+
                 
     def loading_icon(self):
         glBegin(GL_QUADS)
@@ -229,20 +233,20 @@ class Viewer:
         self.display_list_idx = 2
         for key in self.extractor_dict.keys():
             self.extractor_dict[key].stop()
-        self.draw()
+        glutPostRedisplay()
     
     def undo(self):
         label = self.display_list_dict.keys()[0]
         for display_list in self.display_list_dict[label]:
             glDeleteLists(display_list, 1) #delete back and front lists
-            self.draw()
+            glutPostRedisplay()
             
     def remove_label(self, ids):
         '''remove a single contour'''
         for display_list in self.display_list_dict[ids[0]]:
             glDeleteLists(display_list, 1)
             self.extractor_dict[ids[0]].stop()
-            self.draw()
+            glutPostRedisplay()
         
     def create_arcball(self):
         arcball = arc.Arcball()
@@ -276,20 +280,29 @@ class Viewer:
         glTranslatef(-.9, .9, .9)
         glScalef(1.8/self.columns, -1.8/self.rows, -1.8/self.layers)
         #draw the layers
+
+        glEnableClientState(GL_VERTEX_ARRAY)
+        glEnableClientState(GL_COLOR_ARRAY)
         for cnt in contours:
-            gluTessBeginPolygon(self.back_tesselator, None)
-            gluTessBeginContour(self.back_tesselator)
-            for vtx in cnt:
-                gluTessVertex(self.back_tesselator, vtx, [vtx, label_idx])
-            gluTessEndContour(self.back_tesselator)
-            gluTessEndPolygon(self.back_tesselator)
-        
+            colors = np.zeros((cnt.shape[0], 4), np.float)
+            colors[:, :3] = cnt
+            colors[:, 0] /= self.columns - 1
+            colors[:, 1] /= - (self.rows - 1)
+            colors[:, 2] /= - (self.layers - 1)
+            colors[:, 1:3] += 1
+            colors[:, 3] = label_idx
+            glVertexPointer(3, GL_INT, 0, cnt)
+            glColorPointer(4, GL_FLOAT, 0, colors)
+            glDrawArrays(GL_TRIANGLE_STRIP, 0, cnt.shape[0])
+        glDisableClientState(GL_VERTEX_ARRAY)
+        glDisableClientState(GL_COLOR_ARRAY)
+
         glPopMatrix()
-        
+
         glEnable(GL_LIGHTING)
-        
+
         glEndList()
-        
+
     def make_front_list(self, contours, color, normals):
         '''Creates a display list to draw a box and the data scaled to .9*the size of the window.
         This list deals with the display seen by the user'''
@@ -303,21 +316,29 @@ class Viewer:
         
         #draw the layers
         glMaterialfv(GL_FRONT_AND_BACK, GL_AMBIENT_AND_DIFFUSE, color)
-        #glMaterialfv(GL_FRONT_AND_BACK, GL_SPECULAR, color) 
-        #glColor3f(*color)
+        glEnableClientState(GL_VERTEX_ARRAY)
+        glEnableClientState(GL_NORMAL_ARRAY)
+        glEnableClientState(GL_COLOR_ARRAY)
         for cnt, normal in zip(contours, normals):
-            gluTessBeginPolygon(self.front_tesselator, None)
-            gluTessBeginContour(self.front_tesselator)
-            for vtx, norm in zip(cnt, normal):
-                norm /= np.linalg.norm(norm)
-                gluTessVertex(self.front_tesselator, vtx, [vtx, norm, color])
-            gluTessEndContour(self.front_tesselator)
-            gluTessEndPolygon(self.front_tesselator)
-        
+            colors = np.zeros_like(normal)
+            colors[...] = np.array(color)
+            colors[cnt[:, 0] == self.columns, :] = np.array([1, 0, 0])
+            colors[cnt[:, 0] == 0, :] = np.array([1, 0, 0])
+            colors[cnt[:, 1] == self.rows, :] = np.array([0, 1, 0])
+            colors[cnt[:, 1] == 0, :] = np.array([0, 1, 0])
+            colors[cnt[:, 2] == self.layers - 1, :] = np.array([0, 1, 1])
+            colors[cnt[:, 2] == 0, :] = np.array([0, 1, 1])
+            glVertexPointer(3, GL_INT, 0, cnt)
+            glNormalPointer(GL_FLOAT, 0, normal)
+            glColorPointer(3, GL_FLOAT, 0, colors)
+            glDrawArrays(GL_TRIANGLE_STRIP, 0, cnt.shape[0])
+        glDisableClientState(GL_VERTEX_ARRAY)
+        glDisableClientState(GL_NORMAL_ARRAY)
+        glDisableClientState(GL_COLOR_ARRAY)
+
         glPopMatrix()
-        
         glEndList()
-        
+
     def make_box_list(self):
         '''makes a display list to draw the box'''
         glNewList(1, GL_COMPILE)
@@ -355,7 +376,8 @@ class Viewer:
         glVertex3f(.9, .9, -.9)
         glVertex3f(.9, .9, .9)
         glEnd()
-                
+
+        glDisable(GL_LIGHTING)
         glColor3f(0.5, 0.5, 0.5)
         
         glRasterPos3f(-.9, .9, .9)
@@ -366,7 +388,7 @@ class Viewer:
         glutBitmapString(GLUT_BITMAP_TIMES_ROMAN_24, "y= " + str(self.rows-1))
         glRasterPos3f(-.9, .9, -.9)
         glutBitmapString(GLUT_BITMAP_TIMES_ROMAN_24, "z= " + str(self.layers-1))
-        
+        glEnable(GL_LIGHTING)
         glPopMatrix()
         glEndList()
         
@@ -483,14 +505,9 @@ class Viewer:
         
     def on_scroll(self, wheel, direction, x, y):
         '''zooms in and out on mouse scroll wheel'''
-        if direction == 1:
-            self.fov = self.fov - 1
-            self.draw()
-        else:
-            self.fov = self.fov + 1
-            self.draw()
-        
-        
+        self.fov -= 1 if direction == 1 else -1
+        glutPostRedisplay()
+
     def on_click(self, button, state, x, y):
         #Left click for arcball rotation
         if (button == GLUT_LEFT_BUTTON and state == GLUT_DOWN):
@@ -527,7 +544,7 @@ class Viewer:
         '''rotates image on dragging with left mouse down'''
         if self.left:
             self.arcball.drag((x,y))
-            self.draw()
+            glutPostRedisplay()
         
     def read_chunk_map(self, chunk_file):
         return pickle.load(open(chunk_file, "rb"))

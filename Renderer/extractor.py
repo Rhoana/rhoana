@@ -20,9 +20,23 @@ import cv2
 import threading
 from Queue import Queue
 
+import Polygon
+
 import scipy.ndimage as sp
 
 from pysqlite2 import dbapi2 as sqlite
+
+
+def contours_to_poly(contours, hierarchy):
+    def is_hole(idx):
+        if hierarchy[idx][3] < 0:
+            return False
+        return not is_hole(hierarchy[idx][3])
+    p = Polygon.Polygon()
+    hierarchy = hierarchy[0]
+    for idx, c in enumerate(contours):
+        p.addContour(c.reshape((c.shape[0], c.shape[2])), is_hole(idx))
+    return p
 
 class Extractor:
     def __init__(self, out_q, directory, label_ids, location, max_x, max_y, extractor_idx):
@@ -30,13 +44,14 @@ class Extractor:
         self.out_q = out_q #queue read by viewer
         
         self.directory = directory #mojo directory
-        self.w = len(glob.glob(self.directory + "\\ids\\tiles\\*"))-1 #default to lowest resolution
+        tiledir = os.path.join(self.directory, 'ids', 'tiles')
+        self.w = len(glob.glob(os.path.join(tiledir, '*'))) - 1 #default to lowest resolution
         self.w_str = "w={0:08}".format(self.w)
-        self.label_folder = self.directory +"\\ids\\tiles\\" + self.w_str
+        self.label_folder = os.path.join(tiledir, self.w_str)
         
-        self.segment_file = self.directory + "\\ids\\segmentInfo.db"
-        self.z_folders = sorted(glob.glob(self.label_folder + "\\*"))
-        h5_file = h5py.File(glob.glob(self.z_folders[0] + "\\*")[0], "r")
+        self.segment_file = os.path.join(self.directory, "ids", "segmentInfo.db")
+        self.z_folders = sorted(glob.glob(os.path.join(self.label_folder, "*")))
+        h5_file = h5py.File(glob.glob(os.path.join(self.z_folders[0], "*"))[0], "r")
         self.label_key = h5_file.keys()[0]
         self.shape = np.shape(h5_file[self.label_key][...])
         h5_file.close()
@@ -44,7 +59,7 @@ class Extractor:
         self.tile_rows = self.shape[0]
         self.tile_columns = self.shape[1]
         
-        self.tiles_per_layer = len(glob.glob(self.z_folders[0] + "\\*"))
+        self.tiles_per_layer = len(glob.glob(os.path.join(self.z_folders[0], "*")))
         
         self.rows = max_x/pow(2, self.w) - 1
         self.columns = max_y/pow(2, self.w) - 1
@@ -55,7 +70,7 @@ class Extractor:
         self.z_order = self.make_z_order(location[2])
         self.start_z = location[2]
         
-        color_file = h5py.File(self.directory + "\\ids\\colorMap.hdf5")
+        color_file = h5py.File(os.path.join(self.directory, "ids", "colorMap.hdf5"))
         self.color_map = color_file["idColorMap"][...]
         color_file.close()
         
@@ -130,43 +145,37 @@ class Extractor:
             tile_list += self.get_tile_list(label, z_list)
         tile_list = set(tile_list)
         for w,x, y, z in tile_list:
-            tile_files = glob.glob(self.z_folders[z] + "\\*")
+            tile_files = glob.glob(os.path.join(self.z_folders[z], "*"))
             for tile_name in tile_files:
                 if os.path.basename(tile_name) == "y={0:08},x={1:08}.hdf5".format(y, x):
                     t_file = h5py.File(tile_name, "r")
                     labels = t_file[self.label_key][...]
                     t_file.close()
                     buffer_array = np.zeros((np.shape(labels)[0]+2, np.shape(labels)[1]+2), np.uint8) #buffer by one pixel on each side
-                    
+
                     for label in label_ids:
                         buffer_array[1:-1, 1:-1] |= labels == label
-                    
-                    contours, hierarchy  = cv2.findContours(buffer_array, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
-                    if not contours == []:
+
+                    if np.any(buffer_array):
                         blur_mask = sp.filters.gaussian_filter(buffer_array.astype(float),11)
                         dy, dx = np.gradient(blur_mask)
-                        
-                        contours = [np.array(cnt) for cnt in contours]
-                        normals = [np.zeros(cnt.shape) for cnt in contours]
-                        for idx, cnt in enumerate(contours):
-                            new_cnt = np.zeros((cnt.shape[0], 3))
-                            
-                            new_cnt[:, 0] = cnt[:, 0, 0] - 1 + x * self.tile_columns
-                            new_cnt[:, 1] = cnt[:, 0, 1] - 1 + y*self.tile_rows
-                            new_cnt[:, 2] = z
-                            
-                            new_normal = np.zeros((cnt.shape[0], 3))
-                            new_normal[:,0] = -dx[cnt[:,0,1], cnt[:,0,0]]
-                            new_normal[:,1] = -dy[cnt[:,0,1], cnt[:,0,0]]
-                            #leave z as 0 for now
-                            
-                            normals[idx] = new_normal
-                            contours[idx] = new_cnt
-                            
+
+                        contours, hierarchy  = cv2.findContours(buffer_array, cv2.RETR_CCOMP, cv2.CHAIN_APPROX_SIMPLE)
+                        p = contours_to_poly(contours, hierarchy)
+                        tristrips = [np.hstack((np.array(s), np.zeros((len(s), 1)))).astype(int) for s in p.triStrip()]
+                        normals = [np.zeros((s.shape[0], 3), np.float) for s in tristrips]
+                        for strip, norms in zip(tristrips, normals):
+                            norms[:, 0] = -dx[strip[:, 1], strip[:, 0]]
+                            norms[:, 1] = -dy[strip[:, 1], strip[:, 0]]
+                            strip[:, 0] += x * self.tile_columns - 1
+                            strip[:, 1] += y * self.tile_rows - 1
+                            strip[:, 2] = z
+
+                        for strip in tristrips:
+                            tmp_n = np.zeros((len(strip), 3), np.float)
+
+                        tot_contours += tristrips
                         tot_normals += normals
-                        tot_contours+=contours
-                        #tot_mask[y*self.tile_rows:(y+1)*self.tile_rows, 
-                        #        x*self.tile_columns:(x+1)*self.tile_columns] += blur_mask[1:-1,1:-1] 
         return tot_contours, tot_normals, tot_mask
         
     def get_tile_list(self, label, z_list):
