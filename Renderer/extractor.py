@@ -167,6 +167,7 @@ class Extractor:
                         for strip, norms in zip(tristrips, normals):
                             norms[:, 0] = -dx[strip[:, 1], strip[:, 0]]
                             norms[:, 1] = -dy[strip[:, 1], strip[:, 0]]
+                            #norms/=np.sqrt(np.sum(norms**2, axis = 1))
                             strip[:, 0] += x * self.tile_columns - 1
                             strip[:, 1] += y * self.tile_rows - 1
                             strip[:, 2] = z

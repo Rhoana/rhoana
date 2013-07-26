@@ -123,6 +123,8 @@ class Viewer:
         glColorMaterial(GL_FRONT_AND_BACK, GL_EMISSION)
         glEnable(GL_COLOR_MATERIAL)
         
+        glLightfv(GL_LIGHT0, GL_SPECULAR, (0,0,0))
+        
         glutDisplayFunc(self.draw)
         glutKeyboardFunc(self.keyboard)
         glutMouseFunc(self.on_click)
@@ -290,7 +292,7 @@ class Viewer:
             colors[:, 1] /= - (self.rows - 1)
             colors[:, 2] /= - (self.layers - 1)
             colors[:, 1:3] += 1
-            colors[:, 3] = label_idx
+            colors[:, 3] = label_idx/255.0
             glVertexPointer(3, GL_INT, 0, cnt)
             glColorPointer(4, GL_FLOAT, 0, colors)
             glDrawArrays(GL_TRIANGLE_STRIP, 0, cnt.shape[0])
@@ -524,12 +526,11 @@ class Viewer:
     
     def pick(self, x,y):
         '''gets the (x,y,z) location in the full volume of a chosen pixel'''
-        self.write_pixels()
         click_color = None
         glReadBuffer(GL_BACK)
         temp = glReadPixels(x,self.win_h-y, 1,1, GL_RGBA, GL_FLOAT)[0][0]
         click_color = temp[:3]
-        label_idx = math.round(temp[3]*255.0)
+        label_idx = int(temp[3]*255.0 + .5)
         label = self.label_dict[label_idx]
         if not np.all(click_color==0):
             location  = [int(click_color[0]*(self.columns-1)), 
