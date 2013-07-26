@@ -20,9 +20,23 @@ import cv2
 import threading
 from Queue import Queue
 
+import Polygon
+
 import scipy.ndimage as sp
 
 from pysqlite2 import dbapi2 as sqlite
+
+
+def contours_to_poly(contours, hierarchy):
+    def is_hole(idx):
+        if hierarchy[idx][3] < 0:
+            return False
+        return not is_hole(hierarchy[idx][3])
+    p = Polygon.Polygon()
+    hierarchy = hierarchy[0]
+    for idx, c in enumerate(contours):
+        p.addContour(c.reshape((c.shape[0], c.shape[2])), is_hole(idx))
+    return p
 
 class Extractor:
     def __init__(self, out_q, directory, label_ids, location, max_x, max_y):
@@ -136,36 +150,30 @@ class Extractor:
                     labels = t_file[self.label_key][...]
                     t_file.close()
                     buffer_array = np.zeros((np.shape(labels)[0]+2, np.shape(labels)[1]+2), np.uint8) #buffer by one pixel on each side
-                    
+
                     for label in label_ids:
                         buffer_array[1:-1, 1:-1] |= labels == label
-                    
-                    contours, hierarchy  = cv2.findContours(buffer_array, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
-                    if not contours == []:
+
+                    if np.any(buffer_array):
                         blur_mask = sp.filters.gaussian_filter(buffer_array.astype(float),11)
                         dy, dx = np.gradient(blur_mask)
-                        
-                        contours = [np.array(cnt) for cnt in contours]
-                        normals = [np.zeros(cnt.shape) for cnt in contours]
-                        for idx, cnt in enumerate(contours):
-                            new_cnt = np.zeros((cnt.shape[0], 3))
-                            
-                            new_cnt[:, 0] = cnt[:, 0, 0] - 1 + x * self.tile_columns
-                            new_cnt[:, 1] = cnt[:, 0, 1] - 1 + y*self.tile_rows
-                            new_cnt[:, 2] = z
-                            
-                            new_normal = np.zeros((cnt.shape[0], 3))
-                            new_normal[:,0] = -dx[cnt[:,0,1], cnt[:,0,0]]
-                            new_normal[:,1] = -dy[cnt[:,0,1], cnt[:,0,0]]
-                            #leave z as 0 for now
-                            
-                            normals[idx] = new_normal
-                            contours[idx] = new_cnt
-                            
+
+                        contours, hierarchy  = cv2.findContours(buffer_array, cv2.RETR_CCOMP, cv2.CHAIN_APPROX_SIMPLE)
+                        p = contours_to_poly(contours, hierarchy)
+                        tristrips = [np.hstack((np.array(s), np.zeros((len(s), 1)))).astype(int) for s in p.triStrip()]
+                        normals = [np.zeros((s.shape[0], 3), np.float) for s in tristrips]
+                        for strip, norms in zip(tristrips, normals):
+                            norms[:, 0] = -dx[strip[:, 1], strip[:, 0]]
+                            norms[:, 1] = -dy[strip[:, 1], strip[:, 0]]
+                            strip[:, 0] += x * self.tile_columns - 1
+                            strip[:, 1] += y * self.tile_rows - 1
+                            strip[:, 2] = z
+
+                        for strip in tristrips:
+                            tmp_n = np.zeros((len(strip), 3), np.float)
+
+                        tot_contours += tristrips
                         tot_normals += normals
-                        tot_contours+=contours
-                        #tot_mask[y*self.tile_rows:(y+1)*self.tile_rows, 
-                        #        x*self.tile_columns:(x+1)*self.tile_columns] += blur_mask[1:-1,1:-1] 
         return tot_contours, tot_normals, tot_mask
         
     def get_tile_list(self, label, z_list):

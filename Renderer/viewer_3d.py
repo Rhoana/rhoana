@@ -281,13 +281,12 @@ class Viewer:
         glScalef(1.8/self.columns, -1.8/self.rows, -1.8/self.layers)
         #draw the layers
         for cnt in contours:
-            gluTessBeginPolygon(self.back_tesselator, None)
-            gluTessBeginContour(self.back_tesselator)
-            for vtx in cnt:
-                gluTessVertex(self.back_tesselator, vtx, [vtx, label_idx])
-            gluTessEndContour(self.back_tesselator)
-            gluTessEndPolygon(self.back_tesselator)
-        
+            glBegin(GL_TRIANGLE_STRIP)
+            for vertex in cnt:
+                glColor4f(1.0*vertex[0]/(self.columns-1), -1.0*vertex[1]/(self.rows-1)+1.0, -1.0*vertex[2]/(self.layers-1)+1.0, label_idx)
+                glVertex3fv(vertex)
+            glEnd()
+
         glPopMatrix()
         
         glEnable(GL_LIGHTING)
@@ -310,18 +309,24 @@ class Viewer:
         #glMaterialfv(GL_FRONT_AND_BACK, GL_SPECULAR, color) 
         #glColor3f(*color)
         for cnt, normal in zip(contours, normals):
-            gluTessBeginPolygon(self.front_tesselator, None)
-            gluTessBeginContour(self.front_tesselator)
-            for vtx, norm in zip(cnt, normal):
-                norm /= np.linalg.norm(norm)
-                gluTessVertex(self.front_tesselator, vtx, [vtx, norm, color])
-            gluTessEndContour(self.front_tesselator)
-            gluTessEndPolygon(self.front_tesselator)
-        
+            glBegin(GL_TRIANGLE_STRIP)
+            for v, n in zip(cnt, normal):
+                if (v[0] == self.columns or v[0]==0):
+                    glMaterialfv(GL_FRONT_AND_BACK, GL_AMBIENT_AND_DIFFUSE, (1,0,0))
+                elif (v[1] == self.rows or v[1] == 0):
+                    glMaterialfv(GL_FRONT_AND_BACK, GL_AMBIENT_AND_DIFFUSE, (0,1,0))
+                elif (v[2] == self.layers-1 or v[2] == 0):
+                    glMaterialfv(GL_FRONT_AND_BACK, GL_AMBIENT_AND_DIFFUSE, (0,0,1))
+                else:
+                    glMaterialfv(GL_FRONT_AND_BACK, GL_AMBIENT_AND_DIFFUSE, color)
+                glNormal3fv(n)
+                glVertex3fv(v)
+            glEnd()
+
         glPopMatrix()
-        
+
         glEndList()
-        
+
     def make_box_list(self):
         '''makes a display list to draw the box'''
         glNewList(1, GL_COMPILE)
