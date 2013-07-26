@@ -144,12 +144,13 @@ class Viewer:
     
     def shift(self, key):
         '''translate the viewing box based on keyboard input'''
+        #may want to tune the translation levels better
         if key == chr(105):
-            self.center_y +=float(self.fov)**2/10000
+            self.center_y -=float(self.fov)**2/10000
         elif key == chr(106):
             self.center_x +=float(self.fov)**2/10000
         elif key == chr(107):
-            self.center_y -= float(self.fov)**2/10000
+            self.center_y += float(self.fov)**2/10000
         elif key == chr(108):
             self.center_x -=float(self.fov)**2/10000
             
@@ -506,11 +507,12 @@ class Viewer:
     
     def pick(self, x,y):
         '''gets the (x,y,z) location in the full volume of a chosen pixel'''
+        self.write_pixels()
         click_color = None
         glReadBuffer(GL_BACK)
         temp = glReadPixels(x,self.win_h-y, 1,1, GL_RGBA, GL_FLOAT)[0][0]
         click_color = temp[:3]
-        label_idx = int(temp[3]*255.0)
+        label_idx = math.round(temp[3]*255.0)
         label = self.label_dict[label_idx]
         if not np.all(click_color==0):
             location  = [int(click_color[0]*(self.columns-1)), 
