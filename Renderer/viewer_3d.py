@@ -6,7 +6,7 @@
 #Allows 3d viewing of nerve cord or neuron stacks.
 #Includes ability to fully rotate image in 3 dimensions and to mark locations in 3-space
 #
-#Version Date: 7/25 5:00
+#Version Date: 7/26 10:30
 #-------------------------
 
 import sys
@@ -183,8 +183,8 @@ class Viewer:
             elif temp[0] == "ids":
                 self.num_labels += 1
                 label_idx = self.num_labels
-                self.label_dict[label_idx] = temp[1:][0][0]
-                extr = extractor.Extractor(self.in_q, self.directory, temp[1:][0], self.pick_location, self.max_x, self.max_y)
+                self.label_dict[label_idx] = temp[1:][0][0][0]
+                extr = extractor.Extractor(self.in_q, self.directory, temp[1:][0], self.pick_location, self.max_x, self.max_y, label_idx)
                 self.extractor_dict[temp[1][0][0]] = extr
                 extracting_worker = threading.Thread(target = extr.run, name = "extr")
                 extracting_worker.daemon = True
@@ -194,8 +194,9 @@ class Viewer:
                 color = temp[2]
                 primary_label = temp[3]
                 normals = temp[4]
+                label_idx = temp[5]
                 if self.make_lists:
-                    self.make_display_lists(contours, color/255.0, primary_label, normals)
+                    self.make_display_lists(contours, color/255.0, primary_label, normals, label_idx)
             elif temp[0] == "limits":
                 self.max_x= temp[1]
                 self.max_y = temp[2]
@@ -252,7 +253,7 @@ class Viewer:
         arcball.place([self.win_w/2, self.win_h/2], self.win_w/2)
         return arcball
         
-    def make_display_lists(self, contours, color, label, normals):
+    def make_display_lists(self, contours, color, label, normals, label_idx):
         '''Generates display lists to draw both the front and back buffered images'''
         if self.first: #make the box 
             display_list = glGenLists(1)
@@ -265,8 +266,6 @@ class Viewer:
         else:
             self.display_list_dict[label] = [self.display_list_idx, self.display_list_idx+1]
         self.make_front_list(contours, color, normals)
-        label_idx = self.num_labels
-        sys.stdout.flush()
         self.make_back_list(contours, label_idx)
         self.display_list_idx +=2
         
@@ -376,7 +375,8 @@ class Viewer:
         glVertex3f(.9, .9, -.9)
         glVertex3f(.9, .9, .9)
         glEnd()
-                
+
+        glDisable(GL_LIGHTING)
         glColor3f(0.5, 0.5, 0.5)
         
         glRasterPos3f(-.9, .9, .9)
@@ -387,7 +387,7 @@ class Viewer:
         glutBitmapString(GLUT_BITMAP_TIMES_ROMAN_24, "y= " + str(self.rows-1))
         glRasterPos3f(-.9, .9, -.9)
         glutBitmapString(GLUT_BITMAP_TIMES_ROMAN_24, "z= " + str(self.layers-1))
-        
+        glEnable(GL_LIGHTING)
         glPopMatrix()
         glEndList()
         
@@ -411,7 +411,7 @@ class Viewer:
         #multiply by -1 and add 1 to invert color axis
         vertex = vert_label[0]
         sys.stdout.flush()
-        glColor4f(1.0*vertex[0]/(self.columns-1), -1.0*vertex[1]/(self.rows-1)+1.0, -1.0*vertex[2]/(self.layers-1)+1.0, vert_label[1])
+        glColor4f(1.0*vertex[0]/(self.columns-1), -1.0*vertex[1]/(self.rows-1)+1.0, -1.0*vertex[2]/(self.layers-1)+1.0, vert_label[1]/255.0)
         glVertex3fv(vertex)
         
     def draw(self, pick=False):
@@ -516,9 +516,8 @@ class Viewer:
         elif (button == GLUT_RIGHT_BUTTON and state == GLUT_DOWN):
             self.left = False #turn off dragging rotation
             self.draw(pick=True)
-            self.pick_location, self.marker_color, label = self.pick(x,y)
-            print self.pick_location#send the pick location to mojo
-            print label #send the label location to mojo
+            self.pick_location, self.marker_color, self.label = self.pick(x,y)
+            print "location", self.pick_location[0], self.pick_location[1], self.pick_location[2], self.label #send the label location to mojo
             sys.stdout.flush()
             self.has_marker = True
     
@@ -528,17 +527,16 @@ class Viewer:
         glReadBuffer(GL_BACK)
         temp = glReadPixels(x,self.win_h-y, 1,1, GL_RGBA, GL_FLOAT)[0][0]
         click_color = temp[:3]
-        label_idx = int(temp[3])
-        sys.stdout.flush()
+        label_idx = int(temp[3]*255.0)
         label = self.label_dict[label_idx]
-        if np.all(click_color!=0):
+        if not np.all(click_color==0):
             location  = [int(click_color[0]*(self.columns-1)), 
                         int(-(click_color[1]-1)*(self.rows-1)), int(-(click_color[2]-1)*((self.layers-1)))]
             glReadBuffer(GL_FRONT)
             marker_color_neg = glReadPixels(x,self.win_h-y, 1,1, GL_RGB, GL_FLOAT)[0][0]
             marker_color = 1-marker_color_neg
             return location, marker_color, label
-        return self.pick_location, self.marker_color, label
+        return self.pick_location, self.marker_color, self.label
         
     def on_drag(self, x, y):
         '''rotates image on dragging with left mouse down'''
@@ -587,14 +585,14 @@ if __name__ == '__main__':
             secondary_ids = [int(label) for label in re.split(',', split_str[1])]
         ids += [primary_id + secondary_ids]
         
-    extr = extractor.Extractor(display_queue, directory, ids, location, max_x, max_y)
+    extr = extractor.Extractor(display_queue, directory, ids, location, max_x, max_y, 0)
     viewer  = Viewer(location, display_queue, directory, max_x, max_y)
     viewer.extractor_dict[ids[0][0]] = extr
     handler = handler.Input_Handler(display_queue)
     
     viewer.set_dimensions(extr.rows, extr.columns, extr.layers, extr.w)
     
-    viewer.label_dict[0/255.0] = ids[0][0]
+    viewer.label_dict[0] = ids[0][0]
     
     extracting_worker = threading.Thread(target = extr.run, name = "extr")
     input_worker = threading.Thread(target = handler.run, name = "input_worker")
