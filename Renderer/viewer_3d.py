@@ -161,12 +161,12 @@ class Viewer:
         '''reset the viewing box to 0 translation'''
         self.center_x = 0
         self.center_y = 0
-        self.draw()
+        glutPostRedisplay()
         
     def reset_zoom(self):
         '''reset the zoom level'''
         self.fov = 60
-        self.draw()
+        glutPostRedisplay()
     
     def reset(self):
         self.reset_translation()
@@ -180,7 +180,6 @@ class Viewer:
                 self.pick_location = temp[1:][0]
                 self.pick_location[0] = int(float(self.pick_location[0]*self.columns)/self.max_x)
                 self.pick_location[1] = int(float(self.pick_location[1]*self.rows)/self.max_y)
-                self.draw_marker()
             elif temp[0] == "ids":
                 self.num_labels += 1
                 label_idx = self.num_labels
@@ -197,7 +196,6 @@ class Viewer:
                 normals = temp[4]
                 if self.make_lists:
                     self.make_display_lists(contours, color/255.0, primary_label, normals)
-                self.draw()
             elif temp[0] == "limits":
                 self.max_x= temp[1]
                 self.max_y = temp[2]
@@ -207,11 +205,13 @@ class Viewer:
             elif temp[0] == "remove":
                 self.remove_label(temp[1:][0])
             self.st = time.time()
+            glutPostRedisplay()
         #set icon to green if processes are done
         if time.time()-self.st > 0.25:
             self.icon_color = np.array((0.0, 1.0, 0.0))
             self.make_lists = True
-        self.draw()
+            glutPostRedisplay()
+
                 
     def loading_icon(self):
         glBegin(GL_QUADS)
@@ -231,20 +231,20 @@ class Viewer:
         self.display_list_idx = 2
         for key in self.extractor_dict.keys():
             self.extractor_dict[key].stop()
-        self.draw()
+        glutPostRedisplay()
     
     def undo(self):
         label = self.display_list_dict.keys()[0]
         for display_list in self.display_list_dict[label]:
             glDeleteLists(display_list, 1) #delete back and front lists
-            self.draw()
+            glutPostRedisplay()
             
     def remove_label(self, ids):
         '''remove a single contour'''
         for display_list in self.display_list_dict[ids[0]]:
             glDeleteLists(display_list, 1)
             self.extractor_dict[ids[0]].stop()
-            self.draw()
+            glutPostRedisplay()
         
     def create_arcball(self):
         arcball = arc.Arcball()
@@ -492,14 +492,9 @@ class Viewer:
         
     def on_scroll(self, wheel, direction, x, y):
         '''zooms in and out on mouse scroll wheel'''
-        if direction == 1:
-            self.fov = self.fov - 1
-            self.draw()
-        else:
-            self.fov = self.fov + 1
-            self.draw()
-        
-        
+        self.fov -= 1 if direction == 1 else -1
+        glutPostRedisplay()
+
     def on_click(self, button, state, x, y):
         #Left click for arcball rotation
         if (button == GLUT_LEFT_BUTTON and state == GLUT_DOWN):
@@ -537,7 +532,7 @@ class Viewer:
         '''rotates image on dragging with left mouse down'''
         if self.left:
             self.arcball.drag((x,y))
-            self.draw()
+            glutPostRedisplay()
         
     def read_chunk_map(self, chunk_file):
         return pickle.load(open(chunk_file, "rb"))
