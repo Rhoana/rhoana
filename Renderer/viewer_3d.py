@@ -26,6 +26,10 @@ from Queue import Queue
 from OpenGL.GLUT import *
 from OpenGL.GLU import *
 from OpenGL.GL import *
+try:
+    from OpenGL.GLUT.freeglut import *
+except Exception:
+    pass
 import arcball as arc
 
 from pysqlite2 import dbapi2 as sqlite

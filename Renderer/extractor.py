@@ -30,13 +30,14 @@ class Extractor:
         self.out_q = out_q #queue read by viewer
         
         self.directory = directory #mojo directory
-        self.w = len(glob.glob(self.directory + "\\ids\\tiles\\*"))-1 #default to lowest resolution
+        tiledir = os.path.join(self.directory, 'ids', 'tiles')
+        self.w = len(glob.glob(os.path.join(tiledir, '*'))) - 1 #default to lowest resolution
         self.w_str = "w={0:08}".format(self.w)
-        self.label_folder = self.directory +"\\ids\\tiles\\" + self.w_str
+        self.label_folder = os.path.join(tiledir, self.w_str)
         
-        self.segment_file = self.directory + "\\ids\\segmentInfo.db"
-        self.z_folders = glob.glob(self.label_folder + "\\*")
-        h5_file = h5py.File(glob.glob(self.z_folders[0] + "\\*")[0], "r")
+        self.segment_file = os.path.join(self.directory, "ids", "segmentInfo.db")
+        self.z_folders = glob.glob(os.path.join(self.label_folder, "*"))
+        h5_file = h5py.File(glob.glob(os.path.join(self.z_folders[0], "*"))[0], "r")
         self.label_key = h5_file.keys()[0]
         self.shape = np.shape(h5_file[self.label_key][...])
         h5_file.close()
@@ -44,7 +45,7 @@ class Extractor:
         self.tile_rows = self.shape[0]
         self.tile_columns = self.shape[1]
         
-        self.tiles_per_layer = len(glob.glob(self.z_folders[0] + "\\*"))
+        self.tiles_per_layer = len(glob.glob(os.path.join(self.z_folders[0], "*")))
         
         self.rows = max_x/pow(2, self.w) - 1
         self.columns = max_y/pow(2, self.w) - 1
@@ -55,7 +56,7 @@ class Extractor:
         self.z_order = self.make_z_order(location[2])
         self.start_z = location[2]
         
-        color_file = h5py.File(self.directory + "\\ids\\colorMap.hdf5")
+        color_file = h5py.File(os.path.join(self.directory, "ids", "colorMap.hdf5"))
         self.color_map = color_file["idColorMap"][...]
         color_file.close()
         
@@ -128,7 +129,7 @@ class Extractor:
             tile_list += self.get_tile_list(label, z_list)
         tile_list = set(tile_list)
         for w,x, y, z in tile_list:
-            tile_files = glob.glob(self.z_folders[z] + "\\*")
+            tile_files = glob.glob(os.path.join(self.z_folders[z], "*"))
             for tile_name in tile_files:
                 if os.path.basename(tile_name) == "y={0:08},x={1:08}.hdf5".format(y, x):
                     t_file = h5py.File(tile_name, "r")
