@@ -11,7 +11,10 @@ import pymaxflow
 import timer
 import os
 
-try:    
+Debug = False
+
+try:
+
     input_path = sys.argv[1]
     output_path = sys.argv[2]
     
@@ -56,16 +59,15 @@ try:
     ### Threshold and Gap Completion settings - loop over these values
     
     ##Threshold
-    #probability_thresholds = list(np.arange(0.21, 0.51, 0.01))
-    #smoothing_factors = [0.6]
-    #gap_completion_factors = [0.05]
+    # probability_thresholds = list(np.arange(0.31, 0.71, 0.02))
+    # smoothing_factors = [0.6]
+    # gap_completion_factors = [0.05]
     
     ##Gap completion
-    probability_thresholds = [0.5]
+    probability_thresholds = [0.6]
     smoothing_factors = [0.2]
     gap_completion_factors = list(np.arange(0.008, 0.24, 0.008))
     gap_completion_factors.reverse()
-    
     
     ##Single cut example
     #probability_thresholds = [0.3]
@@ -355,6 +357,10 @@ try:
                 #ws_boundary[np.nonzero(ws == extra_cellular_id)] = 1
     
                 segmentations[:,:,segmentation_count] = ws_boundary > 0
+
+                if Debug:
+                    mahotas.imsave(output_path + '.seg_{0}.png'.format(segmentation_count), np.uint8(segmentations[:,:,segmentation_count] * 255))
+
                 segmentation_count = segmentation_count + 1
                 print "Segmentation {0} produced aftert {1} seconds".format(segmentation_count, int(time.time() - main_st))
                 sys.stdout.flush()
