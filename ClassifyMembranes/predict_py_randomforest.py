@@ -15,11 +15,9 @@ import h5py
 import glob
 import mahotas
 
-forest_file = 'D:\\dev\\Rhoana\\classifierTraining\\Miketraining\\training2\\rhoana_forest_3class.hdf5'
-input_image_folder = 'D:\\dev\\Rhoana\\classifierTraining\\Miketraining\\all'
-input_image_suffix = '_labeled.png'
-input_features_suffix = '.hdf5'
-output_folder = 'D:\\dev\\Rhoana\\classifierTraining\\Miketraining\\output2py\\'
+input_image = sys.argv[1]
+forest_file = sys.argv[2]
+output_file = sys.argv[3]
 
 NODE_TERMINAL = -1
 NODE_TOSPLIT  = -2
@@ -39,12 +37,6 @@ nrnodes = model['/forest/nrnodes'][...];
 ntree = model['/forest/ntree'][...];
 nclass = model['/forest/nclass'][...];
 
-
-files = sorted( glob.glob( input_image_folder + '\\*' + input_image_suffix ) )
-
-print 'Found {0} images to classify.'.format(len(files))
-
-for file in files:
 	features_file = file.replace(input_image_suffix, input_features_suffix)
 
 	# Load the features
