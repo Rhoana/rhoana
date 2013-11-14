@@ -14,6 +14,7 @@ import h5py
 import glob
 import mahotas
 import subprocess
+import os
 
 import pycuda.autoinit
 import pycuda.driver as cu
@@ -463,10 +464,12 @@ extern "C" __global__ void trainKernel(
 }
 """
 
-input_image_folder = 'D:\\dev\\Rhoana\\classifierTraining\\LGNTraining\\Josh2\\'
-input_image_suffix = '_labeled.png'
+input_image_folder1 = 'D:\\dev\\Rhoana\\classifierTraining\\LGNTraining\\LGNTraining_new\\'
+#input_image_folder2 = 'D:\\dev\\Rhoana\\classifierTraining\\LGNTraining\\Combined_LessMito\\'
+raw_image_suffix = '.tif'
+input_image_suffix = '_labeled.tif'
 input_features_suffix = '_rhoana_features.h5'
-output_path = 'D:\\dev\\Rhoana\\classifierTraining\\LGNTraining\\Josh2\\rhoana_forest_2class.hdf5'
+output_path = 'D:\\dev\\Rhoana\\classifierTraining\\LGNTraining\\LGNTraining_new\\rhoana_forest_2class.hdf5'
 
 features_prog = 'D:\\dev\\Rhoana\\rhoana\\ClassifyMembranes\\x64\\Release\\compute_features.exe'
 
@@ -474,7 +477,8 @@ features_prog = 'D:\\dev\\Rhoana\\rhoana\\ClassifyMembranes\\x64\\Release\\compu
 gpu_train = nvcc.SourceModule(gpu_randomforest_train_source, no_extern_c=True).get_function('trainKernel')
 
 # Load training data
-files = sorted( glob.glob( input_image_folder + '\\*' + input_image_suffix ) )
+files = sorted( glob.glob( input_image_folder1 + '\\*' + input_image_suffix ) )
+#files = files + sorted( glob.glob( input_image_folder2 + '\\*' + input_image_suffix ) )
 
 #2 Class
 class_colors = [[255,0,0], [0,255,0]]
@@ -516,11 +520,12 @@ for file in files:
 		training_y = np.concatenate((training_y, np.ones((len(class_indices[0]), 1), dtype=np.int32) * (classi + 1)))
 
 		# Load the features
+		image_file = file.replace(input_image_suffix, raw_image_suffix)
 		features_file = file.replace(input_image_suffix, input_features_suffix)
 
 		if not os.path.exists(features_file):
-			print "Computing features:", features_prog, file, features_file
-			subprocess.check_call([features_prog, file, features_file], env=os.environ)
+			print "Computing features:", features_prog, image_file, features_file
+			subprocess.check_call([features_prog, image_file, features_file], env=os.environ)
 
 		f = h5py.File(features_file, 'r')
 
@@ -531,6 +536,8 @@ for file in files:
 			feature = f[k][...]
 			train_features[i,:] = feature[class_indices[0], class_indices[1]]
 
+		f.close()
+		
 		if training_x.size > 0:
 			training_x = np.concatenate((training_x, train_features), axis=1)
 		else:

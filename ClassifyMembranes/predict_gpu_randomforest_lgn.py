@@ -63,11 +63,11 @@ __global__ void predictKernel(const float *x, int n, int mdim, const int *treema
 }
 """
 
-forest_file = 'D:\\dev\\Rhoana\\classifierTraining\\LGNTraining\\Josh2\\rhoana_forest_2class.hdf5'
-input_image_folder = 'D:\\dev\\Rhoana\\classifierTraining\\LGNTraining\\Josh2\\'
-input_image_suffix = '_labeled.png'
+forest_file = 'D:\\dev\\Rhoana\\classifierTraining\\LGNTraining\\LGNTraining_new\\rhoana_forest_2class.hdf5'
+input_image_folder = 'D:\\dev\\Rhoana\\classifierTraining\\LGNTraining\\LGNTraining_new\\'
+input_image_suffix = '_labeled.tif'
 input_features_suffix = '_rhoana_features.h5'
-output_folder = 'D:\\dev\\Rhoana\\classifierTraining\\LGNTraining\\Josh2\\output\\'
+output_folder = 'D:\\dev\\Rhoana\\classifierTraining\\LGNTraining\\LGNTraining_new\\output\\'
 
 # Load the forest settings
 

@@ -528,6 +528,8 @@ for file in files:
 			feature = f[k][...]
 			train_features[i,:] = feature[class_indices[0], class_indices[1]]
 
+		f.close()
+		
 		if training_x.size > 0:
 			training_x = np.concatenate((training_x, train_features), axis=1)
 		else:
