@@ -34,10 +34,18 @@ try:
     nlabels = len(inverse)
     packed_vol = np.reshape(packed_vol, label_vol.shape)
 
+    print "Cleanup starting with {0} segments.".format(nlabels)
+
     # Grow labels so there are no boundary pixels
     for image_i in range(packed_vol.shape[2]):
         label_image = packed_vol[:,:,image_i]
         packed_vol[:,:,image_i] = mahotas.cwatershed(np.zeros(label_image.shape, dtype=np.uint32), label_image, return_lines=False)
+
+    if Debug:
+        from libtiff import TIFF
+        for image_i in range(packed_vol.shape[2]):
+            tif = TIFF.open('preclean_z{0:04}.tif'.format(image_i), mode='w')
+            tif.write_image(np.uint8(packed_vol[:, :, image_i] * 13 % 251))
 
     # Determine label adjicency and sizes
 
@@ -157,15 +165,27 @@ try:
 
                 join_segs(segi, best_seg)
 
-    print "Joined {0} singly connected segments.".format(len(tojoin))
+        print "Joined {0} singly connected segments.".format(len(tojoin))
 
     print "Remapping {0} segments to {1} supersegments.".format(nlabels, len(np.unique(remap_index)))
+
+    if Debug:
+        for image_i in range(packed_vol.shape[2]):
+            tif = TIFF.open('postclean_z{0:04}.tif'.format(image_i), mode='w')
+            tif.write_image(np.uint8(remap_index[packed_vol[:, :, image_i]] * 13 % 251))
 
     clean_vol = inverse[remap_index[packed_vol]]
 
     # Restore boundary lines
     clean_vol[label_vol == 0] = 0
-    
+
+    # Sanity check    
+    inverse, packed_vol = np.unique(clean_vol, return_inverse=True)
+    nlabels_end = len(inverse)
+    packed_vol = np.reshape(packed_vol, label_vol.shape)
+
+    print "Cleanup ending with {0} segments.".format(nlabels_end)
+
     # create the output in a temporary file
     temp_path = output_path + '_tmp'
     out_hdf5 = h5py.File(temp_path, 'w')

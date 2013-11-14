@@ -142,10 +142,10 @@ try:
     
     # copy the probabilities for future use
     probs_out = out_hdf5.create_dataset('probabilities',
-                                        prob_image.shape,
-                                        dtype = prob_image.dtype,
-                                        chunks = prob_dset.chunks,
-                                        compression='gzip')
+                                            prob_image.shape,
+                                            dtype = prob_image.dtype,
+                                            chunks = prob_dset.chunks,
+                                            compression='gzip')
     probs_out[...] = prob_image
     
     for di, direction in enumerate(directions):
@@ -173,6 +173,8 @@ try:
     
         ## Directional smoothing function on probabilities
         step_distance = np.sqrt(np.power(direction[0], 2) + np.power(direction[1], 2))
+        print gap_completion_distances[:,:,di].shape
+        print orient_image_round[:,:,di % 4].shape
         gap_completion_distances[:,:,di] = abs(orient_image_round[:,:,di % 4]) * np.exp(-0.5 * np.power(prob_image - probability_offset, 2) / (prob_sigma**2)) / step_distance
     
     

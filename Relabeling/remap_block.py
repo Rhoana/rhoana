@@ -16,7 +16,11 @@ if __name__ == '__main__':
     blockdata = remap[0, :].searchsorted(blockdata)
     blockdata = remap[1, blockdata]
 
-    l = outf.create_dataset('labels', blockdata.shape, blockdata.dtype)
+    inverse, packed_vol = np.unique(blockdata, return_inverse=True)
+    nlabels_end = len(inverse)
+    print "Remap block ending with {0} segments.".format(nlabels_end)
+
+    l = outf.create_dataset('labels', blockdata.shape, blockdata.dtype, chunks=blockf['labels'].chunks, compression='gzip')
     l[:, :, :] = blockdata
     print "Wrote remapped block of size", l.shape
     outf.flush()

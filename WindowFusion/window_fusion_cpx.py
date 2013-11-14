@@ -75,7 +75,7 @@ def build_model(areas, exclusions, links):
                                                                   val = [1] * len(excl))],
                                      senses = "L",
                                      rhs = [1])
-    print "  ", ct, "exclusions"
+    #print "  ", len(exclusions), "exclusions"
 
     print "finding links"
     # add links and link constraints
@@ -105,10 +105,11 @@ def build_model(areas, exclusions, links):
 
     print "done"
     model.objective.set_sense(model.objective.sense.maximize)
-    model.parameters.threads.set(1) 
+    model.parameters.threads.set(4) 
     model.parameters.mip.tolerances.mipgap.set(0.02)  # 2% tolerance
     # model.parameters.emphasis.memory.set(1)  # doesn't seem to help
     model.parameters.emphasis.mip.set(1)
+    model.parameters.simplex.tolerances.feasibility.set(1e-9)
 
     # model.write("theproblem.lp")
     return model, link_to_segs
@@ -189,6 +190,7 @@ if __name__ == '__main__':
 
     # Build the map from incoming label to linked labels
     on_segments = np.array(model.solution.get_values(range(num_segments))).astype(np.bool)
+    on_segments[0] = 0  # CPLEX might not turn off the background segment
     print on_segments.sum(), "active segments"
     segment_map = np.arange(num_segments, dtype=np.uint64)
     segment_map[~ on_segments] = 0
@@ -196,6 +198,7 @@ if __name__ == '__main__':
     if DEBUG:
         # Sanity check
         areas, exclusions, links = overlaps.count_overlaps_exclusionsets(numslices, numsegs, labels, link_worth)
+        #TODO: This assert triggers on lgn data = CMOR
         for excl in exclusions:
             assert sum(on_segments[s] for s in excl) <= 1
 
@@ -207,7 +210,7 @@ if __name__ == '__main__':
         l1, l2 = links_to_segs[linkidx]
         assert on_segments[l1]
         assert on_segments[l2]
-        segment_map[l2] = l1  # link higher to lower
+        segment_map[l2] = l1 # link higher to lower
         print "linked", l2, "to", l1
 
     # set background to 0
@@ -239,9 +242,9 @@ if __name__ == '__main__':
             out_labels[:, :, Z] |= segment_map[labels[:, :, seg_idx, Z]]
 
     # copy over probabilities
-    in_probs = h5f['probabilities']
-    out_probs = lf.create_dataset('probabilities', in_probs.shape, dtype=in_probs.dtype, chunks=in_probs.chunks, compression='gzip')
-    out_probs[...] = in_probs[...]
+    #in_probs = h5f['probabilities']
+    #out_probs = lf.create_dataset('probabilities', in_probs.shape, dtype=in_probs.dtype, chunks=in_probs.chunks, compression='gzip')
+    #out_probs[...] = in_probs[...]
     lf.close()
 
     # move to final location

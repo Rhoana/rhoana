@@ -6,8 +6,7 @@ import datetime
 from itertools import product
 from collections import defaultdict
 
-USE_SBATCH = True
-MEASURE_PERFORMANCE = True
+FUSED_QUEUE = "normal_serial"
 
 class Job(object):
     all_jobs = []
@@ -16,7 +15,6 @@ class Job(object):
         self.name = self.__class__.__name__ + str(len(Job.all_jobs)) + '_' + datetime.datetime.now().isoformat()
         self.already_done = False
         self.processors = 1
-        self.time = 180
         self.memory = 1000
         Job.all_jobs.append(self)
 
@@ -33,57 +31,39 @@ class Job(object):
         print "RUN", self.name
         print " ".join(self.command())
 
-        if USE_SBATCH:
-            command_list = ["sbatch",
-                "-J", self.name,                   # Job name
-                "-p", "serial_requeue",            # Work queue
-                "--requeue",
-                "-n", str(self.processors),        # Number of processors
-                "-t", str(self.time),              # Time in munites 1440 = 24 hours
-                "--mem-per-cpu", str(self.memory), # Max memory in MB (strict - attempts to allocate more memory will fail)
-                "-o", "logs/out." + self.name,     # Standard out file
-                "-e", "logs/error." + self.name]   # Error out file
+        command_list = ["sbatch",
+            "-J", self.name,                   # Job name
+            "-p", "serial_requeue",            # Work queue
+            "--requeue",
+            "-n", str(self.processors),        # Number of processors
+            "-t", "180",                       # Time in munites 1440 = 24 hours
+            "--mem-per-cpu", str(self.memory), # Max memory in MB (strict - attempts to allocate more memory will fail)
+            "-o", "logs/out." + self.name,     # Standard out file
+            "-e", "logs/error." + self.name]   # Error out file
 
-            if len(self.dependencies) > 0:
-                #print command_list
-                #print self.dependency_strings()
-                command_list = command_list + self.dependency_strings()
+        if len(self.dependencies) > 0:
+            #print command_list
+            #print self.dependency_strings()
+            command_list = command_list + self.dependency_strings()
 
-            print command_list
+        print command_list
 
-            process = subprocess.Popen(command_list,
-                stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        process = subprocess.Popen(command_list,
+            stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
 
-            if MEASURE_PERFORMANCE:
-                sbatch_out, sbatch_err = process.communicate("#!/bin/bash\nperf stat -o logs/perf.{0} {1}".format(self.name, " ".join(self.command())))
-            else:
-                sbatch_out, sbatch_err = process.communicate("#!/bin/bash\n{0}".format(" ".join(self.command())))
+        sbatch_out, sbatch_err = process.communicate("#!/bin/bash\n{0}".format(" ".join(self.command())))
 
-            if len(sbatch_err) == 0:
-                self.jobid = sbatch_out.split()[3]
-                #print 'jobid={0}'.format(self.jobid)
+        print sbatch_out
+        print sbatch_err
 
-        else:
-            subprocess.check_call(["bsub",
-                                   "-Q", "all ~0",
-                                   "-r",
-                                   "-R", "rusage[mem=" + str(self.memory) + "]",
-                                   "-g", "/diced_connectome",
-                                   "-q", "normal_serial" ,
-                                   "-J", self.name,
-                                   "-o", "logs/out." + self.name,
-                                   "-e", "logs/error." + self.name,
-                                   "-w", self.dependency_strings()] +
-                                  self.command())
+        if len(sbatch_err) == 0:
+            self.jobid = sbatch_out.split()[3]
 
     def dependency_strings(self):
-        if USE_SBATCH:
-            dependency_string = ":".join(d.jobid for d in self.dependencies if not d.already_done)
-            if len(dependency_string) > 0:
-                return ["-d", "afterok:" + dependency_string]
-            return []
-        else:
-            return " && ".join("done(%s)" % d.name for d in self.dependencies if not d.already_done)
+        dependency_string = ":".join(d.jobid for d in self.dependencies if not d.already_done)
+        if len(dependency_string) > 0:
+            return ["-d", "afterany:" + dependency_string]
+        return []
 
     @classmethod
     def run_all(cls):
@@ -180,33 +160,30 @@ class ClassifySegement_Image(Job):
         self.classifier_file = classifier_file
         self.dependencies = []
         self.memory = 4000
-        self.time = 360
-        self.features_file = os.path.join('segmentations',
-                                      'features_%d.hdf5' % (idx))
         self.prob_file = os.path.join('segmentations',
                                       'probs_%d.hdf5' % (idx))
         self.output = os.path.join('segmentations',
                                    'segs_%d.hdf5' % (idx))
-        self.already_done = os.path.exists(self.output)
 
     def command(self):
         return ['python',
                 os.path.join(os.environ['CONNECTOME'], 'Control', 'segment_image.py'),
-                self.raw_image, self.classifier_file, self.features_file, self.prob_file, self.output]
+                self.raw_image, self.classifier_file, self.prob_file, self.output]
+
 
 class Block(Job):
     def __init__(self, segmented_slices, indices, *args):
         Job.__init__(self)
         self.already_done = False
         self.segmented_slices = segmented_slices
-        self.dependencies = segmented_slices
+        self.dependencies = []#segmented_slices
         self.memory = 4000
         self.output = os.path.join('bigdicedblocks', 'block_%d_%d_%d.hdf5' % indices)
         self.args = [str(a) for a in args] + [self.output]
         self.already_done = os.path.exists(self.output)
 
     def command(self):
-        return ['python', os.path.join(os.environ['CONNECTOME'], 'Control', 'dice_block.py')] + self.args + [s.output for s in self.segmented_slices]
+        return ['python', os.path.join(os.environ['CONNECTOME'], 'Control', 'dice_block.py')] + self.args + [s for s in self.segmented_slices]
 
 class FusedBlock(Job):
     def __init__(self, block, indices, global_block_number):
@@ -227,23 +204,6 @@ class FusedBlock(Job):
                 self.block.output,
                 str(self.global_block_number),
                 self.output]
-
-class CleanBlock(Job):
-    def __init__(self, fusedblock):
-        Job.__init__(self)
-        self.already_done = False
-        self.indices = fusedblock.indices
-        self.block = fusedblock.block
-        self.global_block_number = fusedblock.global_block_number
-        self.dependencies = [fusedblock]
-        self.memory = 4000
-        self.inputlabels = fusedblock.output
-        self.inputprobs = fusedblock.block.output
-        self.output = os.path.join('cleanedblocks', 'block_%d_%d_%d.hdf5' % self.indices)
-        self.already_done = os.path.exists(self.output)
-
-    def command(self):
-        return [os.path.join(os.environ['CONNECTOME'], 'Control', 'clean_block.sh'), self.inputlabels, self.inputprobs, self.output]
 
 class PairwiseMatching(Job):
     def __init__(self, fusedblock1, fusedblock2, direction, even_or_odd, halo_width):
@@ -272,8 +232,7 @@ class JoinConcatenation(Job):
         self.dependencies = inputs
         self.memory = 16000
         self.output = os.path.join('joins', outfilename)
-        self.already_done = os.path.exists(self.output)
-        
+
     def command(self):
         return [os.path.join(os.environ['CONNECTOME'], 'Control', 'concatenate_joins.sh')] + \
             [s.output for s in self.dependencies] + \
@@ -370,33 +329,31 @@ def dice(job_builder, args, full_sizes, core_sizes, halo_sizes):
 # Driver
 ###############################
 if __name__ == '__main__':
+    image_size = 5120
 
-    assert 'CONNECTOME' in os.environ
-    #assert 'VIRTUAL_ENV' in os.environ
-
-    # Default settings
-    image_size = 2048
     probability_subimage_size = 1024
     probability_subimage_halo = 32
+
     segmentation_subimage_size = 1024
     segmentation_subimage_halo = 128
+
     block_xy_halo = 64
     block_xy_size = 512 - (2 * 64)
     block_z_size = 52
     block_z_halo = 6
 
-    classifier_file = os.path.join(os.environ['CONNECTOME'], 'ClassifyMembranes', 'GB_classifier.txt')
+    assert 'CONNECTOME' in os.environ
+    #assert 'VIRTUAL_ENV' in os.environ
 
-    settings_file = sys.argv[1]
-    os.environ['CONNECTOME_SETTINGS'] = settings_file
-    execfile(settings_file)
+    #images = [f.rstrip() for f in open(sys.argv[1])]
+    #classifier_file = os.path.join(os.environ['CONNECTOME'], 'ClassifyMembranes', 'GB_classifier.txt')
 
-    images = [f.rstrip() for f in open(sys.argv[2])]
+    #segmentations = [ClassifySegement_Image(idx, im, classifier_file)
+    #                 for idx, im in enumerate(images)]
 
-    segmentations = [ClassifySegement_Image(idx, im, classifier_file)
-                    for idx, im in enumerate(images)]
+    print(sys.argv[1])
+    segmentations = [f.rstrip() for f in open(sys.argv[1])]
 
-    #segmentations = [f.rstrip() for f in open(sys.argv[2])]
     #print segmentations
     
     # Dice full volume
@@ -418,36 +375,34 @@ if __name__ == '__main__':
     # Window fuse all blocks
     fused_blocks = dict((idxs, FusedBlock(block, idxs, num)) for num, (idxs, block) in enumerate(blocks.iteritems()))
 
-    # Cleanup all blocks (remove small or completely enclosed segments)
-    cleaned_blocks = dict((idxs, CleanBlock(fb)) for idxs, fb in fused_blocks.iteritems())
 
     # Pairwise match all blocks.
     #
-    # We overwrite each block in cleaned_blocks (the python dict, not the file)
+    # We overwrite each block in fused_blocks (the python dict, not the file)
     # with the output of the pairwise matching, and work in non-overlapping
     # sets (even-to-odd, then odd-to-even)
     for direction in range(3):  # X, Y, Z
         for wpidx, which_pairs in enumerate(['even', 'odd']):
-            for idx in cleaned_blocks:
+            for idx in fused_blocks:
                 if (idx[direction] % 2) == wpidx:  # merge even-to-odd, then odd-to-even
                     neighbor_idx = list(idx)
                     neighbor_idx[direction] += 1  # check neighbor exists
                     neighbor_idx = tuple(neighbor_idx)
-                    if neighbor_idx in cleaned_blocks:
-                        pw = PairwiseMatching(cleaned_blocks[idx], cleaned_blocks[neighbor_idx],
+                    if neighbor_idx in fused_blocks:
+                        pw = PairwiseMatching(fused_blocks[idx], fused_blocks[neighbor_idx],
                                               direction,  # matlab
                                               which_pairs,
                                               block_xy_halo if direction < 2 else block_z_halo)
                         # we can safely overwrite (variables, not files)
                         # because of nonoverlapping even/odd sets
-                        cleaned_blocks[idx] = JobSplit(pw, 0)
-                        cleaned_blocks[neighbor_idx] = JobSplit(pw, 1)
+                        fused_blocks[idx] = JobSplit(pw, 0)
+                        fused_blocks[neighbor_idx] = JobSplit(pw, 1)
 
     # Contatenate the joins from all the blocks to a single file, for building
     # the global remap.  Work first on XY planes, to add some parallelism and
     # limit number of command arguments.
     plane_joins_lists = {}
-    for idxs, block in cleaned_blocks.iteritems():
+    for idxs, block in fused_blocks.iteritems():
         plane_joins_lists[idxs[2]] = plane_joins_lists.get(idxs[2], []) + [block]
     plane_join_jobs = [JoinConcatenation('concatenate_Z_%d' % idx, plane_joins_lists[idx])
                        for idx in plane_joins_lists]
@@ -457,7 +412,7 @@ if __name__ == '__main__':
     remap = GlobalRemap('globalmap', full_join)
 
     # and apply it to every block
-    remapped_blocks = [RemapBlock(fb, remap, idx) for idx, fb in cleaned_blocks.iteritems()]
+    remapped_blocks = [RemapBlock(fb, remap, idx) for idx, fb in fused_blocks.iteritems()]
     remapped_blocks_by_plane = defaultdict(list)
     for bl in remapped_blocks:
         remapped_blocks_by_plane[bl.indices[2]] += [bl]
@@ -472,23 +427,23 @@ if __name__ == '__main__':
                      for idx, _ in enumerate(segmentations)]
 
     # # Render fused blocks directly
-    # cleaned_blocks_by_plane = defaultdict(list)
-    # for idx, fb in cleaned_blocks.iteritems():
-    #     cleaned_blocks_by_plane[fb.indices[2]] += [fb]
-    # max_zslab = max(cleaned_blocks_by_plane.keys())
+    # fused_blocks_by_plane = defaultdict(list)
+    # for idx, fb in fused_blocks.iteritems():
+    #     fused_blocks_by_plane[fb.indices[2]] += [fb]
+    # max_zslab = max(fused_blocks_by_plane.keys())
     # fused_output_labels = [ExtractLabelPlane(idx,
-    #                                    cleaned_blocks_by_plane[min(idx / block_z_size, max_zslab)],
+    #                                    fused_blocks_by_plane[min(idx / block_z_size, max_zslab)],
     #                                    idx - block_z_size * min(idx / block_z_size, max_zslab),  # offset within block
     #                                    image_size, block_xy_size)
     #                  for idx, _ in enumerate(segmentations)]
 
-    if len(sys.argv) == 3:
+    if len(sys.argv) == 2:
         Job.run_all()
     else:
         for j in Job.all_jobs:
-            if j.output == sys.argv[3] or sys.argv[3] in j.output or sys.argv[3] in j.output[0]:
+            if j.output == sys.argv[2] or sys.argv[2] in j.output or sys.argv[2] in j.output[0]:
                 for k in j.dependencies:
-                    if k.output != sys.argv[3] and sys.argv[3] not in k.output and sys.argv[3] not in k.output[0]:
+                    if k.output != sys.argv[2] and sys.argv[2] not in k.output and sys.argv[2] not in k.output[0]:
                         k.already_done = True
                 j.run()
                 

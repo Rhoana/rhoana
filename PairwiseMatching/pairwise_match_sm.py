@@ -7,9 +7,12 @@ import h5py
 import fast64counter
 
 import time
+import copy
 
 
-Debug = False
+Debug = True
+
+single_image_matching = True
 
 block1_path, block2_path, direction, halo_size, outblock1_path, outblock2_path = sys.argv[1:]
 direction = int(direction)
@@ -20,26 +23,6 @@ halo_size = int(halo_size)
 # adjacent in X, Y, Z).  Block1 is always closer to the 0,0,0 corner of the
 # volume.
 ###############################
-
-###############################
-# Note that we are still in matlab hdf5 coordinates, so everything is stored ZYX
-###############################
-
-###############################
-#Change joining thresholds here
-###############################
-#Join 1 (less joining)
-auto_join_pixels = 20000; # Join anything above this many pixels overlap
-minoverlap_pixels = 2000; # Consider joining all pairs over this many pixels overlap
-minoverlap_dual_ratio = 0.7; # If both overlaps are above this then join
-minoverlap_single_ratio = 0.9; # If either overlap is above this then join
-
-# Join 2 (more joining)
-# auto_join_pixels = 10000; # Join anything above this many pixels overlap
-# minoverlap_pixels = 1000; # Consider joining all pairs over this many pixels overlap
-# minoverlap_dual_ratio = 0.5; # If both overlaps are above this then join
-# minoverlap_single_ratio = 0.8; # If either overlap is above this then join
-
 
 print 'Running pairwise matching', " ".join(sys.argv[1:])
 
@@ -70,6 +53,7 @@ for ntry in range(5):
 
 assert block1.size == block2.size
 
+
 # append the blocks, and pack them so we can use the fast 64-bit counter
 stacked = np.vstack((block1, block2))
 inverse, packed = np.unique(stacked, return_inverse=True)
@@ -90,7 +74,13 @@ direction = direction - 1
 
 # Adjust overlapping region boundaries for direction
 lo_block1[direction] = - 2 * halo_size
-hi_block2[direction] = 2 * halo_size;
+hi_block2[direction] = 2 * halo_size
+
+if single_image_matching:
+    lo_block1[direction] = lo_block1[direction] + halo_size
+    lo_block2[direction] = lo_block2[direction] + halo_size
+    hi_block1[direction] = lo_block1[direction] + 1
+    hi_block2[direction] = lo_block2[direction] + 1
 
 block1_slice = tuple(slice(l, h) for l, h in zip(lo_block1, hi_block1))
 block2_slice = tuple(slice(l, h) for l, h in zip(lo_block2, hi_block2))
@@ -110,16 +100,26 @@ areas = dict(zip(*areacounter.get_counts()))
 
 if Debug:
     from libtiff import TIFF
+
+    # output full block images
     for image_i in range(block1.shape[2]):
         tif = TIFF.open('block1_z{0:04}.tif'.format(image_i), mode='w')
         tif.write_image(np.uint8(block1[:, :, image_i] * 13 % 251))
         tif = TIFF.open('block2_z{0:04}.tif'.format(image_i), mode='w')
         tif.write_image(np.uint8(block2[:, :, image_i] * 13 % 251))
-    for image_i in range(packed_overlap1.shape[2]):
-        tif = TIFF.open('packed_overlap1_z{0:04}.tif'.format(image_i), mode='w')
-        tif.write_image(np.uint8(packed_overlap1[:, :, image_i] * 13 % 251))
-        tif = TIFF.open('packed_overlap2_z{0:04}.tif'.format(image_i), mode='w')
-        tif.write_image(np.uint8(packed_overlap2[:, :, image_i] * 13 % 251))
+
+    #output overlap images
+    if single_image_matching:
+        tif = TIFF.open('packed_overlap1.tif', mode='w')
+        tif.write_image(np.uint8(np.squeeze(packed_overlap1) * 13 % 251))
+        tif = TIFF.open('packed_overlap2.tif', mode='w')
+        tif.write_image(np.uint8(np.squeeze(packed_overlap2) * 13 % 251))
+    else:
+        for image_i in range(packed_overlap1.shape[2]):
+            tif = TIFF.open('packed_overlap1_z{0:04}.tif'.format(image_i), mode='w')
+            tif.write_image(np.uint8(packed_overlap1[:, :, image_i] * 13 % 251))
+            tif = TIFF.open('packed_overlap2_z{0:04}.tif'.format(image_i), mode='w')
+            tif.write_image(np.uint8(packed_overlap2[:, :, image_i] * 13 % 251))
 
     # import pylab
     # pylab.figure()
@@ -137,56 +137,71 @@ if Debug:
 
     # pylab.show()
 
+# Merge with stable marrige matches best match = greatest overlap
 to_merge = []
-to_steal = []
+
+m_preference = {}
+w_preference = {}
+
+# Generate preference lists
 for l1, l2, overlap_area in zip(overlap_labels1, overlap_labels2, overlap_areas):
-    if l1 == 0 or l2 == 0:
-        continue
-    if ((overlap_area > auto_join_pixels) or
-        ((overlap_area > minoverlap_pixels) and
-         ((overlap_area > minoverlap_single_ratio * areas[l1]) or
-          (overlap_area > minoverlap_single_ratio * areas[l2]) or
-          ((overlap_area > minoverlap_dual_ratio * areas[l1]) and
-           (overlap_area > minoverlap_dual_ratio * areas[l2]))))):
-        if inverse[l1] != inverse[l2]:
-            print "Merging segments {0} and {1}.".format(inverse[l1], inverse[l2])
-            to_merge.append((inverse[l1], inverse[l2]))
+    if inverse[l1] != 0 and inverse[l2] != 0:
+        if l1 not in m_preference:
+            m_preference[l1] = [(l2, overlap_area)]
+        else:
+            m_preference[l1].append((l2, overlap_area))
+        if l2 not in w_preference:
+            w_preference[l2] = [(l1, overlap_area)]
+        else:
+            w_preference[l2].append((l1, overlap_area))
+        print '{1} = {0} ({2} overlap).'.format(l1, l2, overlap_area)
+
+# Sort preference lists
+for mk in m_preference.keys():
+    m_preference[mk] = sorted(m_preference[mk], key=lambda x:x[1], reverse=True)
+
+for wk in w_preference.keys():
+    w_preference[wk] = sorted(w_preference[wk], key=lambda x:x[1], reverse=True)
+
+# Prep for proposals
+mlist = sorted(m_preference.keys())
+wlist = sorted(w_preference.keys())
+
+mfree = mlist[:]
+engaged  = {}
+mprefers2 = copy.deepcopy(m_preference)
+wprefers2 = copy.deepcopy(w_preference)
+
+# Stable marriage loop
+while mfree:
+    m = mfree.pop(0)
+    mlist = mprefers2[m]
+    w = mlist.pop(0)[0]
+    fiance = engaged.get(w)
+    if not fiance:
+        # She's free
+        engaged[w] = m
+        print("  {0} and {1} engaged".format(w, m))
     else:
-        print "Stealing segments {0} and {1}.".format(inverse[l1], inverse[l2])
-        to_steal.append((overlap_area, l1, l2))
+        # m proposes w
+        wlist = list(x[0] for x in wprefers2[w])
+        if wlist.index(fiance) > wlist.index(m):
+            # w prefers new m
+            engaged[w] = m
+            print("  {0} dumped {1} for {2}".format(w, fiance, m))
+            if mprefers2[fiance]:
+                # m has more w to try
+                mfree.append(fiance)
+        else:
+            # She is faithful to old fiance
+            if mlist:
+                # Look again
+                mfree.append(m)
 
-# Merges are handled later
-
-# Process steals
-# packed_overlap1_face = packed_overlap1[tuple(0 if i == direction else slice(None, None) for i in range (3))]
-# packed_overlap2_face = packed_overlap2[tuple(-1 if i == direction else slice(None, None) for i in range (3))]
-
-# faceareacounter = fast64counter.ValueCountInt64()
-# faceareacounter.add_values(packed_overlap1_face.ravel())
-# faceareacounter.add_values(packed_overlap2_face.ravel())
-# face_areas = defaultdict(int)
-# face_areas.update(dict(zip(*faceareacounter.get_counts())))
-# for _, l1, l2 in reversed(sorted(to_steal)):  # work largest to smallest
-#     if face_areas[l1] >= face_areas[l2]:
-#         packed_overlap2[(packed_overlap1 == l1)] = l1
-#     else:
-#         packed_overlap1[(packed_overlap2 == l2)] = l2
-
-# if Debug:
-#     from libtiff import TIFF
-#     tif = TIFF.open('packed_overlap1_post_steal.tif', mode='w')
-#     tif.write_image(np.uint8(packed_overlap1[0, :, :] * 13 % 251))
-#     tif = TIFF.open('packed_overlap2_post_steal.tif', mode='w')
-#     tif.write_image(np.uint8(packed_overlap2[0, :, :] * 13 % 251))
-
-#     # import pylab
-#     # pylab.figure()
-#     # pylab.imshow(packed_overlap1[0, :, :] % 13)
-#     # pylab.title('packed_overlap1 post steal')
-#     # pylab.figure()
-#     # pylab.imshow(packed_overlap2[0, :, :] % 13)
-#     # pylab.title('packed_overlap2 post steal')
-#     # pylab.show()
+for l2 in engaged.keys():
+    l1 = engaged[l2]
+    print "Merging segments {1} and {0}.".format(l1, l2)
+    to_merge.append((inverse[l1], inverse[l2]))
 
 # handle merges by rewriting the inverse
 merge_map = dict(reversed(sorted(s)) for s in to_merge)
@@ -222,11 +237,13 @@ if previous_merges2 != None:
 
 
 if Debug:
-    from libtiff import TIFF
-    tif = TIFF.open('final_block1.tif', mode='w')
-    tif.write_image(np.uint8(outblock1[0, :, :] * 13 % 251))
-    tif = TIFF.open('final_block2.tif', mode='w')
-    tif.write_image(np.uint8(outblock2[0, :, :] * 13 % 251))
+
+    # output full block images
+    for image_i in range(block1.shape[2]):
+        tif = TIFF.open('block1_final_z{0:04}.tif'.format(image_i), mode='w')
+        tif.write_image(np.uint8(outblock1[:, :, image_i] * 13 % 251))
+        tif = TIFF.open('block2_final_z{0:04}.tif'.format(image_i), mode='w')
+        tif.write_image(np.uint8(outblock2[:, :, image_i] * 13 % 251))
 
     # import pylab
     # pylab.figure()

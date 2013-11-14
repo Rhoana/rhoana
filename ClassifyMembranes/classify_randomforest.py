@@ -27,12 +27,14 @@ NODE_TERMINAL = -1
 NODE_TOSPLIT  = -2
 NODE_INTERIOR = -3
 
-Debug = True
+Debug = False
 
 # Load the forest settings
 
 class rf_model (object):
     def __init__(self, path):
+
+	print 'Opening rf model file {0}'.format(path)
 
         model = h5py.File(path, 'r')
 

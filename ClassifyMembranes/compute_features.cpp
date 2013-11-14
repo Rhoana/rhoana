@@ -51,7 +51,9 @@ int main(int argc, char** argv) {
     int option_index = 0;
 
     //int c = getopt_long (argc, argv, "w:m:", long_options, &option_index);
-    int c = getopt(argc, argv, _T("w:m:"));
+    //int c = getopt(argc, argv, "w:m:");
+	// Change for windows / Visual Studio:
+	int c = getopt(argc, argv, _T("w:m:"));
 
     /* Detect the end of the options. */
     if (c == -1)

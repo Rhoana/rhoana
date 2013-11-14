@@ -2,7 +2,7 @@
 set -e
 echo "Pairwise matching Python" $*
 
-PMDIR="${CONNECTOME}/Pipeline/PairwiseMatching"
+PMDIR="${CONNECTOME}/PairwiseMatching"
 
 python -u "${PMDIR}"/pairwise_match.py $*
 # ARGS=$(printf ",'%s'" $* | cut -c2-)
