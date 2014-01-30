@@ -34,6 +34,7 @@ def check_file(filename):
 ##################################################
 size_compensation_factor = 0.9
 chunksize = 128  # chunk size in the HDF5
+z_link_dropoff = 0.75  # dropoff factor for links that span more than one Z-slice
 
 # Load environment settings
 if 'CONNECTOME_SETTINGS' in os.environ:
@@ -45,10 +46,10 @@ if 'CONNECTOME_SETTINGS' in os.environ:
 def segment_worth(area):
     return area ** size_compensation_factor
 # weights for links
-def link_worth(area1, area2, area_overlap):
+def link_worth(area1, area2, area_overlap, z_distance):
     min_area = np.minimum(area1, area2)
     max_fraction = area_overlap / np.maximum(area1, area2)
-    return max_fraction * (min_area ** size_compensation_factor)
+    return max_fraction * (min_area ** size_compensation_factor) * (z_link_dropoff ** (z_distance - 1))
 
 
 class timed(object):

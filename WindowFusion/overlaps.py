@@ -102,23 +102,24 @@ def count_overlaps_exclusionsets(numslices, numsegs, labels, link_worth):
                 if len(excl) > 1:
                     yield excl
 
-    def overlaps():
-        overlap_areas = fast64counter.ValueCountInt64()
-        for Z in range(numslices - 1):
-            for xslice, yslice in work_by_chunks(labels):
-                subimages_d1 = [labels[yslice, xslice, Seg, Z][...].ravel() for Seg in range(numsegs)]
-                subimages_d2 = [labels[yslice, xslice, Seg, Z + 1][...].ravel() for Seg in range(numsegs)]
-                for s1 in subimages_d1:
-                    for s2 in subimages_d2:
-                        overlap_areas.add_values_pair32(s1, s2)
-        idxs1, idxs2, overlap_areas = overlap_areas.get_counts_pair32()
-        mask = (idxs1 > 0) & (idxs2 > 0)
-        idxs1 = idxs1[mask]
-        idxs2 = idxs2[mask]
-        overlap_areas = overlap_areas[mask]
-        print len(idxs1), "Overlaps"
-        for idx1, idx2, overlap_area in zip(idxs1, idxs2, overlap_areas):
-            yield idx1, idx2, link_worth(float(areas[idx1]), float(areas[idx2]), float(overlap_area))
+    def overlaps(max_z_spacing=1):
+        for z_spacing in range(1, max_z_spacing + 1):
+            for Z in range(numslices - z_spacing):
+                overlap_areas = fast64counter.ValueCountInt64()
+                for xslice, yslice in work_by_chunks(labels):
+                    subimages_d1 = [labels[yslice, xslice, Seg, Z][...].ravel() for Seg in range(numsegs)]
+                    subimages_d2 = [labels[yslice, xslice, Seg, Z + z_spacing][...].ravel() for Seg in range(numsegs)]
+                    for s1 in subimages_d1:
+                        for s2 in subimages_d2:
+                            overlap_areas.add_values_pair32(s1, s2)
+            idxs1, idxs2, overlap_areas = overlap_areas.get_counts_pair32()
+            mask = (idxs1 > 0) & (idxs2 > 0)
+            idxs1 = idxs1[mask]
+            idxs2 = idxs2[mask]
+            overlap_areas = overlap_areas[mask]
+            print len(idxs1), "Overlaps at spacing", z_spacing
+            for idx1, idx2, overlap_area in zip(idxs1, idxs2, overlap_areas):
+                yield idx1, idx2, link_worth(float(areas[idx1]), float(areas[idx2]), float(overlap_area), z_spacing)
 
     return areas, exclusions(), overlaps()
 
