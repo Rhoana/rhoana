@@ -4,7 +4,7 @@ echo "Pairwise matching Python" $*
 
 PMDIR="${CONNECTOME}/PairwiseMatching"
 
-python -u "${PMDIR}"/pairwise_match.py $*
+python -u "${PMDIR}"/pairwise_match_polym.py $*
 # ARGS=$(printf ",'%s'" $* | cut -c2-)
 # PMDIR=${CONNECTOME}/Pipeline/PairwiseMatching
 # 

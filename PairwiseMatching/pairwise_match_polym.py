@@ -26,7 +26,16 @@ def check_file(filename):
 
 Debug = False
 
+# Default settings
 single_image_matching = True
+max_poly_matches = 1
+
+# Load environment settings
+if 'CONNECTOME_SETTINGS' in os.environ:
+    settings_file = os.environ['CONNECTOME_SETTINGS']
+    execfile(settings_file)
+
+print 'Matching segments with up to {0} partners.'.format(max_poly_matches)
 
 block1_path, block2_path, direction, halo_size, outblock1_path, outblock2_path = sys.argv[1:]
 direction = int(direction)
@@ -189,7 +198,7 @@ while repeat_attempt_i < job_repeat_attempts and not (
         mlist = sorted(m_preference.keys())
         wlist = sorted(w_preference.keys())
 
-        mfree = mlist[:]
+        mfree = mlist[:] * max_poly_matches
         engaged  = {}
         mprefers2 = copy.deepcopy(m_preference)
         wprefers2 = copy.deepcopy(w_preference)
@@ -198,32 +207,40 @@ while repeat_attempt_i < job_repeat_attempts and not (
         while mfree:
             m = mfree.pop(0)
             mlist = mprefers2[m]
-            w = mlist.pop(0)[0]
-            fiance = engaged.get(w)
-            if not fiance:
-                # She's free
-                engaged[w] = m
-                print("  {0} and {1} engaged".format(w, m))
-            else:
-                # m proposes w
-                wlist = list(x[0] for x in wprefers2[w])
-                if wlist.index(fiance) > wlist.index(m):
-                    # w prefers new m
-                    engaged[w] = m
-                    print("  {0} dumped {1} for {2}".format(w, fiance, m))
-                    if mprefers2[fiance]:
-                        # m has more w to try
-                        mfree.append(fiance)
+            if mlist:
+                w = mlist.pop(0)[0]
+                fiance = engaged.get(w)
+                if not fiance:
+                    # She's free
+                    engaged[w] = [m]
+                    print("  {0} and {1} engaged".format(w, m))
+                elif len(fiance) < max_poly_matches and m not in fiance:
+                    # Allow polygamy
+                    engaged[w].append(m)
+                    print("  {0} and {1} engaged".format(w, m))
                 else:
-                    # She is faithful to old fiance
-                    if mlist:
-                        # Look again
+                    # m proposes w
+                    wlist = list(x[0] for x in wprefers2[w])
+                    dumped = False
+                    for current_match in fiance:
+                        if wlist.index(current_match) > wlist.index(m):
+                            # w prefers new m
+                            engaged[w].remove(current_match)
+                            engaged[w].append(m)
+                            dumped = True
+                            print("  {0} dumped {1} for {2}".format(w, current_match, m))
+                            if mprefers2[current_match]:
+                                # current_match has more w to try
+                                mfree.append(current_match)
+                            break
+                    if not dumped and mlist:
+                        # She is faithful to old fiance - look again
                         mfree.append(m)
 
         for l2 in engaged.keys():
-            l1 = engaged[l2]
-            print "Merging segments {1} and {0}.".format(l1, l2)
-            to_merge.append((inverse[l1], inverse[l2]))
+            for l1 in engaged[l2]:
+                print "Merging segments {1} and {0}.".format(l1, l2)
+                to_merge.append((inverse[l1], inverse[l2]))
 
         # handle merges by rewriting the inverse
         merge_map = dict(reversed(sorted(s)) for s in to_merge)
@@ -289,13 +306,13 @@ while repeat_attempt_i < job_repeat_attempts and not (
         os.rename(outblock2_path + '_partial', outblock2_path)
         print "Successfully wrote", outblock1_path, 'and', outblock2_path
 
-    except IOError as e:
-        print "I/O error({0}): {1}".format(e.errno, e.strerror)
+    # except IOError as e:
+    #     print "I/O error({0}): {1}".format(e.errno, e.strerror)
     except KeyboardInterrupt:
         pass
-    except:
-        print "Unexpected error:", sys.exc_info()[0]
-        if repeat_attempt_i == job_repeat_attempts:
-            pass
+    # except:
+    #     print "Unexpected error:", sys.exc_info()[0]
+    #     if repeat_attempt_i == job_repeat_attempts:
+    #         pass
         
 assert (check_file(outblock1_path) and check_file(outblock2_path)), "Output files could not be verified after {0} attempts, exiting.".format(job_repeat_attempts)

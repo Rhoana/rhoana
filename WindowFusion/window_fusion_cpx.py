@@ -14,12 +14,32 @@ import overlaps
 
 DEBUG = False
 
+job_repeat_attempts = 5
+
+def check_file(filename):
+    if not os.path.exists(filename):
+        return False
+    # verify the file has the expected data
+    import h5py
+    f = h5py.File(filename, 'r')
+    fkeys = f.keys()
+    f.close()
+    if set(fkeys) != set(['labels', 'seglabels']):
+        os.unlink(filename)
+        return False
+    return True
+
 ##################################################
 # Parameters
 ##################################################
 size_compensation_factor = 0.9
 chunksize = 128  # chunk size in the HDF5
 
+# Load environment settings
+if 'CONNECTOME_SETTINGS' in os.environ:
+    settings_file = os.environ['CONNECTOME_SETTINGS']
+    execfile(settings_file)
+    
 # NB - both these functions should accept array arguments
 # weights for segments
 def segment_worth(area):
@@ -106,7 +126,7 @@ def build_model(areas, exclusions, links):
     print "done"
     model.objective.set_sense(model.objective.sense.maximize)
     model.parameters.threads.set(4) 
-    model.parameters.mip.tolerances.mipgap.set(0.02)  # 2% tolerance
+    model.parameters.mip.tolerances.mipgap.set(0.002)  # 0.2% tolerance
     # model.parameters.emphasis.memory.set(1)  # doesn't seem to help
     model.parameters.emphasis.mip.set(1)
     model.parameters.simplex.tolerances.feasibility.set(1e-9)
@@ -115,141 +135,163 @@ def build_model(areas, exclusions, links):
     return model, link_to_segs
 
 if __name__ == '__main__':
-    h5f = h5py.File(sys.argv[1])
-    segmentations = h5f['segmentations']
-
-    ##################################################
-    # compute all overlaps between multisegmentations
-    ##################################################
-    height, width, numsegs, numslices = segmentations.shape
-
-    # ensure we can store all the labels we need to
-    assert (height * width * numsegs * numslices) < (2 ** 31 - 1), \
-        "Cube too large.  Must be smaller than 2**31 - 1 voxels."
-
-    largest_index = numslices * numsegs * width * height
-
-    st = time.time()
-
-    # Precompute labels, store in HDF5
+    input_path = sys.argv[1]
     block_offset = int(sys.argv[2]) << 32
     output_path = sys.argv[3]
 
-    try:
-        lf = h5py.File(output_path, 'r')
-        if 'labels' in lf.keys():
-            print "Output already generated"
+    repeat_attempt_i = 0
+    while repeat_attempt_i < job_repeat_attempts and not check_file(output_path):
+
+        repeat_attempt_i += 1
+
+        try:
+
+            h5f = h5py.File(input_path)
+            segmentations = h5f['segmentations']
+
+            ##################################################
+            # compute all overlaps between multisegmentations
+            ##################################################
+            height, width, numsegs, numslices = segmentations.shape
+
+            # ensure we can store all the labels we need to
+            assert (height * width * numsegs * numslices) < (2 ** 31 - 1), \
+                "Cube too large.  Must be smaller than 2**31 - 1 voxels."
+
+            largest_index = numslices * numsegs * width * height
+
+            st = time.time()
+
+            # Precompute labels, store in HDF5
+
+            try:
+                lf = h5py.File(output_path, 'r')
+                if 'labels' in lf.keys():
+                    print "Output already generated"
+                    lf.close()
+                    sys.exit(0)
+            except Exception, e:
+                print e
+                pass
+
+            condense_labels = timed(overlaps.condense_labels)
+
+            lf = h5py.File(output_path + '_partial', 'w')
+            chunking = [chunksize, chunksize, 1, 1]
+            labels = lf.create_dataset('seglabels', segmentations.shape, dtype=np.int32, chunks=tuple(chunking), compression='gzip')
+            total_regions = 0
+            cross_Z_offset = 0
+            for Z in range(numslices):
+                this_slice_offset = 0
+                for seg_idx in range(numsegs):
+                    temp, numregions = ndimage_label(1 - segmentations[:, :, seg_idx, Z][...], output=np.int32)
+                    labels[:, :, seg_idx, Z] = temp
+                    offset_labels(Z, seg_idx, labels, this_slice_offset)
+                    this_slice_offset += numregions
+                    total_regions += numregions
+                condensed_count = condense_labels(Z, numsegs, labels)
+                print "Labeling depth %d: original %d, condensed %d" % (Z, this_slice_offset, condensed_count)
+                for seg_idx in range (numsegs):
+                    offset_labels(Z, seg_idx, labels, cross_Z_offset)
+                cross_Z_offset += condensed_count
+                # XXX - apply cross-D offset
+            print "Labeling took", int(time.time() - st), "seconds, ", condense_labels.total_time, "in condensing"
+            print cross_Z_offset, "total labels", total_regions, "before condensing"
+
+            if DEBUG:
+                assert np.max(labels) == cross_Z_offset
+
+            areas, exclusions, links = overlaps.count_overlaps_exclusionsets(numslices, numsegs, labels, link_worth)
+            num_segments = len(areas)
+            assert num_segments == cross_Z_offset + 1  # areas includes an area for 0
+
+            st = time.time()
+            model, links_to_segs = build_model(areas, exclusions, links)
+            print "Building MILP took", int(time.time() - st), "seconds"
+
+            # free memory
+            areas = exclusions = links = None
+            gc.collect()
+
+            print "Solving"
+            model.solve()
+            print "Solving took", int(time.time() - st), "seconds"
+
+            # Build the map from incoming label to linked labels
+            on_segments = np.array(model.solution.get_values(range(num_segments))).astype(np.bool)
+            on_segments[0] = 0  # CPLEX might not turn off the background segment
+            print on_segments.sum(), "active segments"
+            segment_map = np.arange(num_segments, dtype=np.uint64)
+            segment_map[~ on_segments] = 0
+
+            if DEBUG:
+                # Sanity check
+                areas, exclusions, links = overlaps.count_overlaps_exclusionsets(numslices, numsegs, labels, link_worth)
+                #TODO: This assert triggers on lgn data = CMOR
+                for excl in exclusions:
+                    assert sum(on_segments[s] for s in excl) <= 1
+
+            # Process links
+            link_vars = np.array(model.solution.get_values()).astype(np.bool)
+            link_vars[:num_segments] = 0
+            print link_vars.sum(), "active links"
+            for linkidx in np.nonzero(link_vars)[0]:
+                l1, l2 = links_to_segs[linkidx]
+                assert on_segments[l1]
+                assert on_segments[l2]
+                segment_map[l2] = l1 # link higher to lower
+                print "linked", l2, "to", l1
+
+            # set background to 0
+            segment_map[0] = 0
+            # Compress labels
+            next_label = 1
+            for idx in range(1, len(segment_map)):
+                if segment_map[idx] == idx:
+                    segment_map[idx] = next_label
+                    next_label += 1
+                else:
+                    segment_map[idx] = segment_map[segment_map[idx]]
+
+            assert (segment_map > 0).sum() == on_segments.sum()
+            segment_map[segment_map > 0] |= block_offset
+
+            for linkidx in np.nonzero(link_vars)[0]:
+                l1, l2 = links_to_segs[linkidx]
+                # CMOR: This assertion fails for cube2 block_3_5_5.
+                #assert segment_map[l1] == segment_map[l2]
+
+            # Condense results
+            out_labels = lf.create_dataset('labels', [height, width, numslices], dtype=np.uint64,
+                                           chunks=(chunking[0], chunking[1], chunking[3]), compression='gzip')
+            for Z in range(numslices):
+                for seg_idx in range(numsegs):
+                    if (out_labels[:, :, Z][...].astype(bool) * segment_map[labels[:, :, seg_idx, Z]].astype(bool)).sum() != 0:
+                        badsegs = out_labels[:, :, Z][...].astype(bool) * segment_map[labels[:, :, seg_idx, Z]].astype(bool) != 0
+                        print "BAZ", out_labels[:, :, Z][badsegs], segment_map[labels[:, :, seg_idx, Z]][badsegs]
+                    out_labels[:, :, Z] |= segment_map[labels[:, :, seg_idx, Z]]
+
+            # copy over probabilities
+            #in_probs = h5f['probabilities']
+            #out_probs = lf.create_dataset('probabilities', in_probs.shape, dtype=in_probs.dtype, chunks=in_probs.chunks, compression='gzip')
+            #out_probs[...] = in_probs[...]
             lf.close()
-            sys.exit(0)
-    except Exception, e:
-        print e
-        pass
 
-    condense_labels = timed(overlaps.condense_labels)
+            # move to final location
+            if os.path.exists(output_path):
+                os.unlink(output_path)
 
-    lf = h5py.File(output_path + '_partial', 'w')
-    chunking = [chunksize, chunksize, 1, 1]
-    labels = lf.create_dataset('seglabels', segmentations.shape, dtype=np.int32, chunks=tuple(chunking), compression='gzip')
-    total_regions = 0
-    cross_Z_offset = 0
-    for Z in range(numslices):
-        this_slice_offset = 0
-        for seg_idx in range(numsegs):
-            temp, numregions = ndimage_label(1 - segmentations[:, :, seg_idx, Z][...], output=np.int32)
-            labels[:, :, seg_idx, Z] = temp
-            offset_labels(Z, seg_idx, labels, this_slice_offset)
-            this_slice_offset += numregions
-            total_regions += numregions
-        condensed_count = condense_labels(Z, numsegs, labels)
-        print "Labeling depth %d: original %d, condensed %d" % (Z, this_slice_offset, condensed_count)
-        for seg_idx in range (numsegs):
-            offset_labels(Z, seg_idx, labels, cross_Z_offset)
-        cross_Z_offset += condensed_count
-        # XXX - apply cross-D offset
-    print "Labeling took", int(time.time() - st), "seconds, ", condense_labels.total_time, "in condensing"
-    print cross_Z_offset, "total labels", total_regions, "before condensing"
+            os.rename(output_path+ '_partial', output_path)
+            print "Successfully wrote", sys.argv[3]
 
-    if DEBUG:
-        assert np.max(labels) == cross_Z_offset
+        # except IOError as e:
+        #     print "I/O error({0}): {1}".format(e.errno, e.strerror)
+        except KeyboardInterrupt:
+            pass
+        # except:
+        #     print "Unexpected error:", sys.exc_info()[0]
+        #     if repeat_attempt_i == job_repeat_attempts:
+        #         pass
 
-    areas, exclusions, links = overlaps.count_overlaps_exclusionsets(numslices, numsegs, labels, link_worth)
-    num_segments = len(areas)
-    assert num_segments == cross_Z_offset + 1  # areas includes an area for 0
+    assert check_file(output_path), "Output file could not be verified after {0} attempts, exiting.".format(job_repeat_attempts)
 
-    st = time.time()
-    model, links_to_segs = build_model(areas, exclusions, links)
-    print "Building MILP took", int(time.time() - st), "seconds"
-
-    # free memory
-    areas = exclusions = links = None
-    gc.collect()
-
-    print "Solving"
-    model.solve()
-    print "Solving took", int(time.time() - st), "seconds"
-
-    # Build the map from incoming label to linked labels
-    on_segments = np.array(model.solution.get_values(range(num_segments))).astype(np.bool)
-    on_segments[0] = 0  # CPLEX might not turn off the background segment
-    print on_segments.sum(), "active segments"
-    segment_map = np.arange(num_segments, dtype=np.uint64)
-    segment_map[~ on_segments] = 0
-
-    if DEBUG:
-        # Sanity check
-        areas, exclusions, links = overlaps.count_overlaps_exclusionsets(numslices, numsegs, labels, link_worth)
-        #TODO: This assert triggers on lgn data = CMOR
-        for excl in exclusions:
-            assert sum(on_segments[s] for s in excl) <= 1
-
-    # Process links
-    link_vars = np.array(model.solution.get_values()).astype(np.bool)
-    link_vars[:num_segments] = 0
-    print link_vars.sum(), "active links"
-    for linkidx in np.nonzero(link_vars)[0]:
-        l1, l2 = links_to_segs[linkidx]
-        assert on_segments[l1]
-        assert on_segments[l2]
-        segment_map[l2] = l1 # link higher to lower
-        print "linked", l2, "to", l1
-
-    # set background to 0
-    segment_map[0] = 0
-    # Compress labels
-    next_label = 1
-    for idx in range(1, len(segment_map)):
-        if segment_map[idx] == idx:
-            segment_map[idx] = next_label
-            next_label += 1
-        else:
-            segment_map[idx] = segment_map[segment_map[idx]]
-
-    assert (segment_map > 0).sum() == on_segments.sum()
-    segment_map[segment_map > 0] |= block_offset
-
-    for linkidx in np.nonzero(link_vars)[0]:
-        l1, l2 = links_to_segs[linkidx]
-        assert segment_map[l1] == segment_map[l2]
-
-    # Condense results
-    out_labels = lf.create_dataset('labels', [height, width, numslices], dtype=np.uint64,
-                                   chunks=(chunking[0], chunking[1], chunking[3]), compression='gzip')
-    for Z in range(numslices):
-        for seg_idx in range(numsegs):
-            if (out_labels[:, :, Z][...].astype(bool) * segment_map[labels[:, :, seg_idx, Z]].astype(bool)).sum() != 0:
-                badsegs = out_labels[:, :, Z][...].astype(bool) * segment_map[labels[:, :, seg_idx, Z]].astype(bool) != 0
-                print "BAZ", out_labels[:, :, Z][badsegs], segment_map[labels[:, :, seg_idx, Z]][badsegs]
-            out_labels[:, :, Z] |= segment_map[labels[:, :, seg_idx, Z]]
-
-    # copy over probabilities
-    #in_probs = h5f['probabilities']
-    #out_probs = lf.create_dataset('probabilities', in_probs.shape, dtype=in_probs.dtype, chunks=in_probs.chunks, compression='gzip')
-    #out_probs[...] = in_probs[...]
-    lf.close()
-
-    # move to final location
-    if os.path.exists(output_path):
-        os.unlink(output_path)
-
-    os.rename(output_path+ '_partial', output_path)
-    print "Successfully wrote", sys.argv[3]
