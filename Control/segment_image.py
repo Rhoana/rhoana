@@ -67,7 +67,7 @@ while repeat_attempt_i < job_repeat_attempts and not check_file(segmentations_fi
     except:
         print "Unexpected error:", sys.exc_info()[0]
         if repeat_attempt_i == job_repeat_attempts:
-            pass
+            raise
 
 assert check_file(segmentations_file), "Output file could not be verified after {0} attempts, exiting.".format(job_repeat_attempts)
 
