@@ -85,12 +85,10 @@ if __name__ == '__main__':
             
             overlay_colors = color_map[output_ids % ncolors]
 
-            boundaries = output_ids==0
+            boundaries = output_ids==1
 
             for ci in range(3):
-                temp_colors = overlay_colors[:,:,ci].copy()
-                temp_colors[boundaries] = 128
-                overlay_colors[:,:,ci] = temp_colors
+                overlay_colors[:,:,ci][boundaries] = 128
 
             current_image_f = np.float32(mahotas.imread(input_image_path)[:output_size, :output_size])
 
