@@ -275,7 +275,7 @@ class ClassifySegement_Image(Job):
         self.classifier_file = classifier_file
         self.dependencies = []
         self.memory = 4000
-        self.time = 30
+        self.time = 60
         self.features_file = os.path.join('segmentations',
                                       'features_%d.hdf5' % (idx))
         self.prob_file = os.path.join('segmentations',
@@ -449,6 +449,32 @@ class ExtractLabelPlane(Job):
         return [os.path.join(os.environ['CONNECTOME'], 'Control', 'extract_label_plane.sh'), self.output, str(self.image_size), str(self.zoffset), str(self.xy_halo)] + \
             list(self.generate_args())
 
+class ExtractOverlayPlane(Job):
+    def __init__(self, zplane, xy_halo, remapped_blocks, zoffset, image_size, xy_block_size, input_image_path):
+        Job.__init__(self)
+        self.already_done = False
+        self.dependencies = remapped_blocks
+        self.memory = 4000
+        self.time = 30
+        self.zoffset = zoffset
+        self.xy_halo = xy_halo
+        self.image_size = image_size
+        self.xy_block_size = xy_block_size
+        self.input_image_path = input_image_path
+        self.output = os.path.join('output_overlay', 'overlay_%05d.png' % zplane)
+        #self.already_done = os.path.exists(self.output)
+
+    def generate_args(self):
+        for block in self.dependencies:
+            # XY corner followed by filename
+            yield str(block.indices[0] * self.xy_block_size)
+            yield str(block.indices[1] * self.xy_block_size)
+            yield block.output
+
+    def command(self):
+        return [os.path.join(os.environ['CONNECTOME'], 'Control', 'extract_overlay_plane.sh'), self.output, self.input_image_path, str(self.image_size), str(self.zoffset), str(self.xy_halo)] + \
+            list(self.generate_args())
+
 
 ###############################
 # Helper functions
@@ -579,7 +605,14 @@ if __name__ == '__main__':
                                        remapped_blocks_by_plane[min(idx / block_z_size, max_zslab)],
                                        idx - block_z_size * min(idx / block_z_size, max_zslab),  # offset within block
                                        image_size, block_xy_size)
-                     for idx, _ in enumerate(segmentations)]
+                    for idx, _ in enumerate(segmentations)]
+
+    # optional, render overlay images
+    output_labels = [ExtractOverlayPlane(idx, block_xy_halo,
+                                       remapped_blocks_by_plane[min(idx / block_z_size, max_zslab)],
+                                       idx - block_z_size * min(idx / block_z_size, max_zslab),  # offset within block
+                                       image_size, block_xy_size, im)
+                    for idx, im in enumerate(images)]
 
     # # Render fused blocks directly
     # cleaned_blocks_by_plane = defaultdict(list)
