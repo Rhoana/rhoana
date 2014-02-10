@@ -35,6 +35,7 @@ def check_file(filename):
 size_compensation_factor = 0.9
 chunksize = 128  # chunk size in the HDF5
 z_link_dropoff = 0.75  # dropoff factor for links that span more than one Z-slice
+maximum_link_distance = 1
 
 # Load environment settings
 if 'CONNECTOME_SETTINGS' in os.environ:
@@ -202,7 +203,7 @@ if __name__ == '__main__':
             if DEBUG:
                 assert np.max(labels) == cross_Z_offset
 
-            areas, exclusions, links = overlaps.count_overlaps_exclusionsets(numslices, numsegs, labels, link_worth)
+            areas, exclusions, links = overlaps.count_overlaps_exclusionsets(numslices, numsegs, labels, link_worth, maximum_link_distance)
             num_segments = len(areas)
             assert num_segments == cross_Z_offset + 1  # areas includes an area for 0
 

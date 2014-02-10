@@ -74,7 +74,7 @@ def condense_labels(Z, numsegs, labels):
 
 
 
-def count_overlaps_exclusionsets(numslices, numsegs, labels, link_worth):
+def count_overlaps_exclusionsets(numslices, numsegs, labels, link_worth, maximum_link_distance):
     areacounter = fast64counter.ValueCountInt64()
     # Count areas of each label
     for xslice, yslice in work_by_chunks(labels):
@@ -102,10 +102,10 @@ def count_overlaps_exclusionsets(numslices, numsegs, labels, link_worth):
                 if len(excl) > 1:
                     yield excl
 
-    def overlaps(max_z_spacing=1):
-        for z_spacing in range(1, max_z_spacing + 1):
+    def overlaps():
+        for z_spacing in range(1, maximum_link_distance + 1):
+            overlap_areas = fast64counter.ValueCountInt64()
             for Z in range(numslices - z_spacing):
-                overlap_areas = fast64counter.ValueCountInt64()
                 for xslice, yslice in work_by_chunks(labels):
                     subimages_d1 = [labels[yslice, xslice, Seg, Z][...].ravel() for Seg in range(numsegs)]
                     subimages_d2 = [labels[yslice, xslice, Seg, Z + z_spacing][...].ravel() for Seg in range(numsegs)]
