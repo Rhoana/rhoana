@@ -186,10 +186,18 @@ while repeat_attempt_i < job_repeat_attempts and not check_file(output_path):
                 tojoin = np.asarray(np.nonzero(nconnections == 1)[1])
 
                 for segi in tojoin[0]:
-                        # Join this segment to its only neighbour
-                        best_seg = np.nonzero(full_conn[segi,:])[1][0]
 
-                        join_segs(segi, best_seg)
+                        # Ignore segments bordering a cube wall
+                        if (np.any(packed_vol[0,:,:] == segi) or np.any(packed_vol[-1,:,:] == segi) or
+                            np.any(packed_vol[:,0,:] == segi) or np.any(packed_vol[:,-1,:] == segi) or
+                            np.any(packed_vol[:,:,0] == segi) or np.any(packed_vol[:,:,-1] == segi) ):
+                            continue
+
+                        # Join this segment to its only neighbour
+                        neighbours = np.nonzero(full_conn[segi,:])[1]
+                        
+                        if len(neighbours) == 1:
+                            join_segs(segi, neighbours[0])
 
                 print "Joined {0} singly connected segments.".format(len(tojoin))
 
@@ -235,7 +243,7 @@ while repeat_attempt_i < job_repeat_attempts and not check_file(output_path):
     except IOError as e:
         print "I/O error({0}): {1}".format(e.errno, e.strerror)
     except KeyboardInterrupt:
-        pass
+        raise
     except:
         print "Unexpected error:", sys.exc_info()[0]
         if repeat_attempt_i == job_repeat_attempts:
