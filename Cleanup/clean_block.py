@@ -115,8 +115,8 @@ while repeat_attempt_i < job_repeat_attempts and not check_file(output_path):
 
                 #full_npix = full_npix.tocsr()
                 #full_prob = full_prob.tocsr()
-                full_conn = full_npix / full_npix
-                full_mean = full_prob / full_npix
+                full_conn = scipy.sparse.csr_matrix(full_npix / full_npix)
+                full_mean = scipy.sparse.csr_matrix(full_prob / full_npix)
 
             with timer.Timer("segment size calculation"):
                 label_sizes = np.bincount(packed_vol.ravel())
