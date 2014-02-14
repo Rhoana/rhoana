@@ -139,7 +139,7 @@ while repeat_attempt_i < job_repeat_attempts and not (
         if Debug:
 
             ncolors = 10000
-            np.random.seed(8)
+            np.random.seed(7)
             color_map = np.uint8(np.random.randint(0,256,(ncolors+1)*3)).reshape((ncolors + 1, 3))
             
             import mahotas
