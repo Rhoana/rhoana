@@ -7,7 +7,8 @@ import time
 from itertools import product
 from collections import defaultdict
 
-USE_SBATCH = True
+USE_SBATCH = False
+USE_QSUB = True
 MEASURE_PERFORMANCE = False
 
 class Job(object):
@@ -81,6 +82,36 @@ class Job(object):
 
             if len(sbatch_err) == 0:
                 self.jobid = sbatch_out.split()[3]
+                #print 'jobid={0}'.format(self.jobid)
+
+        elif USE_QSUB:
+            command_list = ["qsub",
+                "-N", self.name,                   # Job name
+                "-A", 'hvd113',                    # XSEDE Allocation
+                "-q", "shared",                    # Work queue (partition) = general / unrestricted / interactive / serial_requeue
+                "-l", 'nodes=1:ppn={0}'.format(str(self.processors)),  # Number of processors
+                "-l", 'walltime={0}:00'.format(self.time),             # Time in munites 1440 = 24 hours
+                "-l", '-mppmem={0}'.format(self.memory),               # Max memory per cpu in MB (strict - attempts to allocate more memory will fail)
+                "-o", "logs/outerror." + self.name,     # Standard out file
+                "-e", "logs/outerror." + self.name]   # Error out file
+
+            if len(self.dependencies) > 0:
+                #print command_list
+                #print self.dependency_strings()
+                command_list = command_list + self.dependency_strings()
+
+            print command_list
+
+            process = subprocess.Popen(command_list,
+                stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+
+            if MEASURE_PERFORMANCE:
+                sbatch_out, sbatch_err = process.communicate("#!/bin/bash\nperf stat -o logs/perf.{0} {1}".format(self.name, " ".join(self.command())))
+            else:
+                sbatch_out, sbatch_err = process.communicate("#!/bin/bash\n{0}".format(" ".join(self.command())))
+
+            if len(sbatch_err) == 0:
+                self.jobid = sbatch_out.split('.')[0]
                 #print 'jobid={0}'.format(self.jobid)
 
         else:
@@ -215,57 +246,48 @@ class JobSplit(object):
         self.job.jobid = value
     
 
-class Reassemble(Job):
-    '''reassemble a diced job'''
-    def __init__(self, dataset, output_sizes, joblist, output):
-        Job.__init__(self)
-        self.output_sizes = output_sizes
-        self.dataset = dataset
-        self.dependencies = joblist
-        self.memory = 4000
-        self.output = output
-        self.already_done = False
-
-    def command(self):
-        return ['./reassemble.sh', self.dataset,
-                str(len(self.output_sizes))] + \
-            [str(s) for s in self.output_sizes] + \
-            [j.output for j in self.dependencies] + \
-            [self.output]
-
-class Subimage_ProbabilityMap(Job):
-    def __init__(self, raw_image, idx, xlo, ylo, xhi, yhi, xlo_core, ylo_core, xhi_core, yhi_core):
+class ClassifySubimage(Job):
+    def __init__(self, idx, raw_image, classifier_file, top, left, height, width):
         Job.__init__(self)
         self.already_done = False
         self.raw_image = raw_image
         self.dependencies = []
         self.memory = 4000
-        self.coords = [str(c) for c in (xlo, ylo, xhi, yhi)]
-        self.core_coords = [str(c) for c in (xlo_core, ylo_core, xhi_core, yhi_core)]
-        self.output = os.path.join('subimage_probabilities',
-                                   'probs_%d_%s.hdf5' % (idx, '_'.join(self.coords)))
+        self.classifier_file = classifier_file
+        self.time = 120
+        self.coords = [str(c) for c in (top, left, height, width)]
+        self.prob_file = os.path.join('subimage_probabilities',
+                                      'probs_%d_%s.hdf5' % (idx, '_'.join(self.coords)))
 
     def command(self):
-        return ['python', 'compute_probabilities.py', self.raw_image, self.output] + \
-            self.coords + self.core_coords
+        return ['python',
+            os.path.join(os.environ['CONNECTOME'], 'DeepNets', 'classify_subimage.py'),
+            self.classifier_file, self.raw_image, self.output] + self.coords
 
-class Subimage_SegmentedSlice(Job):
-    def __init__(self, idx, probability_map, raw_image, xlo, ylo, xhi, yhi, xlo_core, ylo_core, xhi_core, yhi_core):
+class ReassembleProbs(Job):
+    def __init__(self, idx, subimage_probs, image_size, xy_block_size):
         Job.__init__(self)
         self.already_done = False
-        self.probability_map = probability_map
-        self.raw_image = raw_image
-        self.dependencies = [self.probability_map]
+        self.dependencies = remapped_blocks
         self.memory = 4000
-        self.coords = [str(c) for c in (xlo, ylo, xhi, yhi)]
-        self.core_coords = [str(c) for c in (xlo_core, ylo_core, xhi_core, yhi_core)]
-        self.output = os.path.join('subimage_segmentations',
-                                   'segs_%d_%s.hdf5' % (idx, '_'.join(self.coords)))
+        self.time = 30
+        self.image_size = image_size
+        self.xy_block_size = xy_block_size
+        self.output = os.path.join('segmentations', 'probs_%d.hdf5' % idx)
+
+    def generate_args(self):
+        for tile in self.dependencies:
+            # XY corner followed by filename
+            yield tile.coords[0]
+            yield tile.coords[1]
+            yield tile.output
 
     def command(self):
-        return ['python', 'segment_image.py', self.raw_image, self.probability_map.output, self.output] + \
-            self.coords + self.core_coords
-
+        return ['python',
+            os.path.join(os.environ['CONNECTOME'], 'DeepNets', 'reassemble_probs.py'),
+            self.output, str(self.image_size)] + \
+            list(self.generate_args())
+            
 class ClassifySegement_Image(Job):
     def __init__(self, idx, raw_image, classifier_file):
         Job.__init__(self)
