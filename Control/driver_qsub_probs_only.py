@@ -268,7 +268,7 @@ class ReassembleProbs(Job):
     def __init__(self, idx, subimage_probs, image_size):
         Job.__init__(self)
         self.already_done = False
-        self.dependencies = remapped_blocks
+        self.dependencies = subimage_probs
         self.memory = 4000
         self.time = 30
         self.image_size = image_size
@@ -561,7 +561,7 @@ if __name__ == '__main__':
     tile_joins_lists = {}
     for idxs, tile in tiles.iteritems():
         tile_joins_lists[idxs[2]] = tile_joins_lists.get(idxs[2], []) + [tile]
-    probabilities = [ReassembleProbs(idx, tile_joins_lists[idx], image_size, xy_block_size))
+    probabilities = [ReassembleProbs(idx, tile_joins_lists[idx], image_size)
                        for idx in tile_joins_lists]
 
     # #TODO: add probs as a dependency for segmentations
