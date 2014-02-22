@@ -28,6 +28,7 @@ Debug = False
 
 # Default settings
 single_image_matching = True
+match_nslices = 1
 partner_min_total_area_ratio = 0.001
 max_poly_matches = 1
 
@@ -117,6 +118,11 @@ while repeat_attempt_i < job_repeat_attempts and not (
             lo_block2[direction] = lo_block2[direction] + halo_size
             hi_block1[direction] = lo_block1[direction] + 1
             hi_block2[direction] = lo_block2[direction] + 1
+        elif match_nslices > 0 and match_nslices < 2 * halo_size:
+            lo_block1[direction] = lo_block1[direction] + halo_size - match_nslices / 2
+            lo_block2[direction] = lo_block2[direction] + halo_size - match_nslices / 2
+            hi_block1[direction] = lo_block1[direction] + match_nslices
+            hi_block2[direction] = lo_block2[direction] + match_nslices
 
         block1_slice = tuple(slice(l, h) for l, h in zip(lo_block1, hi_block1))
         block2_slice = tuple(slice(l, h) for l, h in zip(lo_block2, hi_block2))
@@ -154,9 +160,11 @@ while repeat_attempt_i < job_repeat_attempts and not (
                 mahotas.imsave('packed_overlap1.tif', color_map[np.squeeze(inverse[packed_overlap1]) % ncolors])
                 mahotas.imsave('packed_overlap2.tif', color_map[np.squeeze(inverse[packed_overlap2]) % ncolors])
             else:
-                for image_i in range(packed_overlap1.shape[2]):
-                    mahotas.imsave('packed_overlap1_z{0:04}.tif'.format(image_i), color_map[inverse[packed_overlap1[:, :, image_i]] % ncolors])
-                    mahotas.imsave('packed_overlap2_z{0:04}.tif'.format(image_i), color_map[inverse[packed_overlap2[:, :, image_i]] % ncolors])
+                debug_out1 = b = np.rollaxis(packed_overlap1, direction, 3)
+                debug_out2 = b = np.rollaxis(packed_overlap2, direction, 3)
+                for image_i in range(debug_out1.shape[2]):
+                    mahotas.imsave('packed_overlap1_z{0:04}.tif'.format(image_i), color_map[inverse[debug_out1[:, :, image_i]] % ncolors])
+                    mahotas.imsave('packed_overlap2_z{0:04}.tif'.format(image_i), color_map[inverse[debug_out2[:, :, image_i]] % ncolors])
 
             # import pylab
             # pylab.figure()
@@ -310,18 +318,18 @@ while repeat_attempt_i < job_repeat_attempts and not (
         remap = {}
         # put every pair in the remap
         for v1, v2 in to_merge:
-            print '{0} -> {1}:'.format(v1, v2)
+            #print '{0} -> {1}:'.format(v1, v2)
             remap.setdefault(v1, v1)
             remap.setdefault(v2, v2)
             while v1 != remap[v1]:
-                print '  v1+ {0} -> {1}:'.format(v1, remap[v1])
+                #print '  v1+ {0} -> {1}:'.format(v1, remap[v1])
                 v1 = remap[v1]
             while v2 != remap[v2]:
-                print '  v2+ {0} -> {1}:'.format(v2, remap[v2])
+                #print '  v2+ {0} -> {1}:'.format(v2, remap[v2])
                 v2 = remap[v2]
             if v1 > v2:
                 v1, v2 = v2, v1
-            print '   =  {0} -> {1}.'.format(v2, v1)
+            #print '   =  {0} -> {1}.'.format(v2, v1)
             remap[v2] = v1
 
         for idx, val in enumerate(inverse):
@@ -367,9 +375,11 @@ while repeat_attempt_i < job_repeat_attempts and not (
                 mahotas.imsave('packed_overlap1_final.tif', color_map[np.squeeze(inverse[packed_overlap1]) % ncolors])
                 mahotas.imsave('packed_overlap2_final.tif', color_map[np.squeeze(inverse[packed_overlap2]) % ncolors])
             else:
-                for image_i in range(packed_overlap1.shape[2]):
-                    mahotas.imsave('packed_overlap1_final_z{0:04}.tif'.format(image_i), color_map[inverse[packed_overlap1[:, :, image_i]] % ncolors])
-                    mahotas.imsave('packed_overlap2_final_z{0:04}.tif'.format(image_i), color_map[inverse[packed_overlap2[:, :, image_i]] % ncolors])
+                debug_out1 = b = np.rollaxis(packed_overlap1, direction, 3)
+                debug_out2 = b = np.rollaxis(packed_overlap2, direction, 3)
+                for image_i in range(debug_out1.shape[2]):
+                    mahotas.imsave('packed_overlap1_final_z{0:04}.tif'.format(image_i), color_map[inverse[debug_out1[:, :, image_i]] % ncolors])
+                    mahotas.imsave('packed_overlap2_final_z{0:04}.tif'.format(image_i), color_map[inverse[debug_out2[:, :, image_i]] % ncolors])
 
             # import pylab
             # pylab.figure()
