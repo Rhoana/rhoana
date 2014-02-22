@@ -265,14 +265,13 @@ class ClassifySubimage(Job):
             self.classifier_file, self.raw_image, self.output] + self.coords
 
 class ReassembleProbs(Job):
-    def __init__(self, idx, subimage_probs, image_size, xy_block_size):
+    def __init__(self, idx, subimage_probs, image_size):
         Job.__init__(self)
         self.already_done = False
         self.dependencies = remapped_blocks
         self.memory = 4000
         self.time = 30
         self.image_size = image_size
-        self.xy_block_size = xy_block_size
         self.output = os.path.join('segmentations', 'probs_%d.hdf5' % idx)
 
     def generate_args(self):
@@ -287,7 +286,7 @@ class ReassembleProbs(Job):
             os.path.join(os.environ['CONNECTOME'], 'DeepNets', 'reassemble_probs.py'),
             self.output, str(self.image_size)] + \
             list(self.generate_args())
-            
+
 class ClassifySegement_Image(Job):
     def __init__(self, idx, raw_image, classifier_file):
         Job.__init__(self)
@@ -546,106 +545,126 @@ if __name__ == '__main__':
 
     images = [f.rstrip() for f in open(sys.argv[2])]
 
-    segmentations = [ClassifySegement_Image(idx, im, classifier_file)
-                    for idx, im in enumerate(images)]
-
-    #segmentations = [f.rstrip() for f in open(sys.argv[2])]
-    #print segmentations
+    # Classify images in tiles
+    tiles = {}
+    height = probability_subimage_size + 2 * probability_subimage_halo
+    width = probability_subimage_size + 2 * probability_subimage_halo
+    for idx, im in enumerate(images):
+        for tile_idx_x in range((image_size - 2 * probability_subimage_halo) / probability_subimage_size):
+            top = tile_idx_x * probability_subimage_size
+            for tile_idx_y in range((image_size - 2 * probability_subimage_halo) / probability_subimage_size):
+                left = tile_idx_y * probability_subimage_size
+                tiles[tile_idx_x, tile_idx_y, idx] = ClassifySubimage(
+                    idx, im, classifier_file, top, left, height, width)
     
-    # Dice full volume
-    blocks = {}
-    for block_idx_z in range((len(segmentations) - 2 * block_z_halo) / block_z_size):
-        lo_slice = block_idx_z * block_z_size
-        hi_slice = lo_slice + block_z_size + 2 * block_z_halo
-        for block_idx_x in range((image_size - 2 * block_xy_halo) / block_xy_size):
-            xlo = block_idx_x * block_xy_size
-            xhi = xlo + block_xy_size + 2 * block_xy_halo
-            for block_idx_y in range((image_size - 2 * block_xy_halo) / block_xy_size):
-                ylo = block_idx_y * block_xy_size
-                yhi = ylo + block_xy_size + 2 * block_xy_halo
-                print "Making block {0}, slice {1}, crop {2}.".format(
-                    (block_idx_x, block_idx_y, block_idx_z),
-                    (lo_slice, hi_slice),
-                    (xlo, ylo, xhi, yhi))
-                blocks[block_idx_x, block_idx_y, block_idx_z] = \
-                    Block(segmentations[lo_slice:hi_slice],
-                          (block_idx_x, block_idx_y, block_idx_z),
-                          xlo, ylo, xhi, yhi)
+    # Reassemble tiles
+    tile_joins_lists = {}
+    for idxs, tile in tiles.iteritems():
+        tile_joins_lists[idxs[2]] = tile_joins_lists.get(idxs[2], []) + [tile]
+    probabilities = [ReassembleProbs(idx, tile_joins_lists[idx], image_size, xy_block_size))
+                       for idx in tile_joins_lists]
 
-    # Window fuse all blocks
-    fused_blocks = dict((idxs, FusedBlock(block, idxs, num)) for num, (idxs, block) in enumerate(blocks.iteritems()))
+    # #TODO: add probs as a dependency for segmentations
+    # segmentations = [ClassifySegement_Image(idx, im, classifier_file)
+    #                 for idx, im in enumerate(images)]
 
-    # Cleanup all blocks (remove small or completely enclosed segments)
-    cleaned_blocks = dict((idxs, CleanBlock(fb)) for idxs, fb in fused_blocks.iteritems())
-    #cleaned_blocks = fused_blocks
+    # #segmentations = [f.rstrip() for f in open(sys.argv[2])]
+    # #print segmentations
+    
+    # # Dice full volume
+    # blocks = {}
+    # for block_idx_z in range((len(segmentations) - 2 * block_z_halo) / block_z_size):
+    #     lo_slice = block_idx_z * block_z_size
+    #     hi_slice = lo_slice + block_z_size + 2 * block_z_halo
+    #     for block_idx_x in range((image_size - 2 * block_xy_halo) / block_xy_size):
+    #         xlo = block_idx_x * block_xy_size
+    #         xhi = xlo + block_xy_size + 2 * block_xy_halo
+    #         for block_idx_y in range((image_size - 2 * block_xy_halo) / block_xy_size):
+    #             ylo = block_idx_y * block_xy_size
+    #             yhi = ylo + block_xy_size + 2 * block_xy_halo
+    #             print "Making block {0}, slice {1}, crop {2}.".format(
+    #                 (block_idx_x, block_idx_y, block_idx_z),
+    #                 (lo_slice, hi_slice),
+    #                 (xlo, ylo, xhi, yhi))
+    #             blocks[block_idx_x, block_idx_y, block_idx_z] = \
+    #                 Block(segmentations[lo_slice:hi_slice],
+    #                       (block_idx_x, block_idx_y, block_idx_z),
+    #                       xlo, ylo, xhi, yhi)
 
-    # Pairwise match all blocks.
-    #
-    # We overwrite each block in cleaned_blocks (the python dict, not the file)
-    # with the output of the pairwise matching, and work in non-overlapping
-    # sets (even-to-odd, then odd-to-even)
-    for direction in range(3):  # X, Y, Z
-        for wpidx, which_pairs in enumerate(['even', 'odd']):
-            for idx in cleaned_blocks:
-                if (idx[direction] % 2) == wpidx:  # merge even-to-odd, then odd-to-even
-                    neighbor_idx = list(idx)
-                    neighbor_idx[direction] += 1  # check neighbor exists
-                    neighbor_idx = tuple(neighbor_idx)
-                    if neighbor_idx in cleaned_blocks:
-                        pw = PairwiseMatching(cleaned_blocks[idx], cleaned_blocks[neighbor_idx],
-                                              direction,  # matlab
-                                              which_pairs,
-                                              block_xy_halo if direction < 2 else block_z_halo)
-                        # we can safely overwrite (variables, not files)
-                        # because of nonoverlapping even/odd sets
-                        cleaned_blocks[idx] = JobSplit(pw, 0)
-                        cleaned_blocks[neighbor_idx] = JobSplit(pw, 1)
+    # # Window fuse all blocks
+    # fused_blocks = dict((idxs, FusedBlock(block, idxs, num)) for num, (idxs, block) in enumerate(blocks.iteritems()))
 
-    # Contatenate the joins from all the blocks to a single file, for building
-    # the global remap.  Work first on XY planes, to add some parallelism and
-    # limit number of command arguments.
-    plane_joins_lists = {}
-    for idxs, block in cleaned_blocks.iteritems():
-        plane_joins_lists[idxs[2]] = plane_joins_lists.get(idxs[2], []) + [block]
-    plane_join_jobs = [JoinConcatenation('concatenate_Z_%d' % idx, plane_joins_lists[idx])
-                       for idx in plane_joins_lists]
-    full_join = JoinConcatenation('concatenate_full', plane_join_jobs)
+    # # Cleanup all blocks (remove small or completely enclosed segments)
+    # cleaned_blocks = dict((idxs, CleanBlock(fb)) for idxs, fb in fused_blocks.iteritems())
+    # #cleaned_blocks = fused_blocks
 
-    # build the global remap
-    remap = GlobalRemap('globalmap', full_join)
+    # # Pairwise match all blocks.
+    # #
+    # # We overwrite each block in cleaned_blocks (the python dict, not the file)
+    # # with the output of the pairwise matching, and work in non-overlapping
+    # # sets (even-to-odd, then odd-to-even)
+    # for direction in range(3):  # X, Y, Z
+    #     for wpidx, which_pairs in enumerate(['even', 'odd']):
+    #         for idx in cleaned_blocks:
+    #             if (idx[direction] % 2) == wpidx:  # merge even-to-odd, then odd-to-even
+    #                 neighbor_idx = list(idx)
+    #                 neighbor_idx[direction] += 1  # check neighbor exists
+    #                 neighbor_idx = tuple(neighbor_idx)
+    #                 if neighbor_idx in cleaned_blocks:
+    #                     pw = PairwiseMatching(cleaned_blocks[idx], cleaned_blocks[neighbor_idx],
+    #                                           direction,  # matlab
+    #                                           which_pairs,
+    #                                           block_xy_halo if direction < 2 else block_z_halo)
+    #                     # we can safely overwrite (variables, not files)
+    #                     # because of nonoverlapping even/odd sets
+    #                     cleaned_blocks[idx] = JobSplit(pw, 0)
+    #                     cleaned_blocks[neighbor_idx] = JobSplit(pw, 1)
 
-    # and apply it to every block
-    remapped_blocks = [RemapBlock(fb, remap, idx) for idx, fb in cleaned_blocks.iteritems()]
-    remapped_blocks_by_plane = defaultdict(list)
-    for bl in remapped_blocks:
-        remapped_blocks_by_plane[bl.indices[2]] += [bl]
+    # # Contatenate the joins from all the blocks to a single file, for building
+    # # the global remap.  Work first on XY planes, to add some parallelism and
+    # # limit number of command arguments.
+    # plane_joins_lists = {}
+    # for idxs, block in cleaned_blocks.iteritems():
+    #     plane_joins_lists[idxs[2]] = plane_joins_lists.get(idxs[2], []) + [block]
+    # plane_join_jobs = [JoinConcatenation('concatenate_Z_%d' % idx, plane_joins_lists[idx])
+    #                    for idx in plane_joins_lists]
+    # full_join = JoinConcatenation('concatenate_full', plane_join_jobs)
 
-    # finally, extract the images and output labels
-    # output_images = [CopyImage(i, idx) for idx, i in enumerate(images)]
-    max_zslab = max(remapped_blocks_by_plane.keys())
-    output_labels = [ExtractLabelPlane(idx, block_xy_halo,
-                                       remapped_blocks_by_plane[min(idx / block_z_size, max_zslab)],
-                                       idx - block_z_size * min(idx / block_z_size, max_zslab),  # offset within block
-                                       image_size, block_xy_size)
-                    for idx, _ in enumerate(segmentations)]
+    # # build the global remap
+    # remap = GlobalRemap('globalmap', full_join)
 
-    # optional, render overlay images
-    output_labels = [ExtractOverlayPlane(idx, block_xy_halo,
-                                       remapped_blocks_by_plane[min(idx / block_z_size, max_zslab)],
-                                       idx - block_z_size * min(idx / block_z_size, max_zslab),  # offset within block
-                                       image_size, block_xy_size, im)
-                    for idx, im in enumerate(images)]
+    # # and apply it to every block
+    # remapped_blocks = [RemapBlock(fb, remap, idx) for idx, fb in cleaned_blocks.iteritems()]
+    # remapped_blocks_by_plane = defaultdict(list)
+    # for bl in remapped_blocks:
+    #     remapped_blocks_by_plane[bl.indices[2]] += [bl]
 
-    # # Render fused blocks directly
-    # cleaned_blocks_by_plane = defaultdict(list)
-    # for idx, fb in cleaned_blocks.iteritems():
-    #     cleaned_blocks_by_plane[fb.indices[2]] += [fb]
-    # max_zslab = max(cleaned_blocks_by_plane.keys())
-    # fused_output_labels = [ExtractLabelPlane(idx,
-    #                                    cleaned_blocks_by_plane[min(idx / block_z_size, max_zslab)],
+    # # finally, extract the images and output labels
+    # # output_images = [CopyImage(i, idx) for idx, i in enumerate(images)]
+    # max_zslab = max(remapped_blocks_by_plane.keys())
+    # output_labels = [ExtractLabelPlane(idx, block_xy_halo,
+    #                                    remapped_blocks_by_plane[min(idx / block_z_size, max_zslab)],
     #                                    idx - block_z_size * min(idx / block_z_size, max_zslab),  # offset within block
     #                                    image_size, block_xy_size)
-    #                  for idx, _ in enumerate(segmentations)]
+    #                 for idx, _ in enumerate(segmentations)]
+
+    # # optional, render overlay images
+    # output_labels = [ExtractOverlayPlane(idx, block_xy_halo,
+    #                                    remapped_blocks_by_plane[min(idx / block_z_size, max_zslab)],
+    #                                    idx - block_z_size * min(idx / block_z_size, max_zslab),  # offset within block
+    #                                    image_size, block_xy_size, im)
+    #                 for idx, im in enumerate(images)]
+
+    # # # Render fused blocks directly
+    # # cleaned_blocks_by_plane = defaultdict(list)
+    # # for idx, fb in cleaned_blocks.iteritems():
+    # #     cleaned_blocks_by_plane[fb.indices[2]] += [fb]
+    # # max_zslab = max(cleaned_blocks_by_plane.keys())
+    # # fused_output_labels = [ExtractLabelPlane(idx,
+    # #                                    cleaned_blocks_by_plane[min(idx / block_z_size, max_zslab)],
+    # #                                    idx - block_z_size * min(idx / block_z_size, max_zslab),  # offset within block
+    # #                                    image_size, block_xy_size)
+    # #                  for idx, _ in enumerate(segmentations)]
 
     if len(sys.argv) == 3:
         Job.run_all()
