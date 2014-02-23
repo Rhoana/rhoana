@@ -111,11 +111,11 @@ class Job(object):
             else:
                 qsub_out, qsub_err = process.communicate("#!/bin/bash\ncd $PBS_O_WORKDIR\n{0}".format(" ".join(self.command())))
 
-            print 'out:'
-            print qsub_out
+            # print 'out:'
+            # print qsub_out
 
-            print 'error'
-            print qsub_err
+            # print 'error'
+            # print qsub_err
 
             if len(qsub_err) == 0:
                 self.jobid = qsub_out.split('.')[0]
