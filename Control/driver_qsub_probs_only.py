@@ -49,6 +49,7 @@ class Job(object):
         if self.get_done():
            return 0
         print "RUN", self.name
+        print self.command()
         print " ".join(self.command())
 
         if USE_SBATCH:
@@ -91,9 +92,9 @@ class Job(object):
                 "-q", "shared",                    # Work queue (partition) = general / unrestricted / interactive / serial_requeue
                 "-l", 'nodes=1:ppn={0}'.format(str(self.processors)),  # Number of processors
                 "-l", 'walltime={0}:00'.format(self.time),             # Time in munites 1440 = 24 hours
-                "-l", '-mppmem={0}'.format(self.memory),               # Max memory per cpu in MB (strict - attempts to allocate more memory will fail)
-                "-o", "logs/outerror." + self.name,     # Standard out file
-                "-e", "logs/outerror." + self.name]   # Error out file
+                #"-l", '-mppmem={0}'.format(self.memory),               # Max memory per cpu in MB (strict - attempts to allocate more memory will fail)
+                "-e", "logs/outerror." + self.name.split('_')[0],      # Error out file
+                "-j", "eo"]                                            # Join standard out file to error file
 
             if len(self.dependencies) > 0:
                 #print command_list
@@ -106,12 +107,18 @@ class Job(object):
                 stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
 
             if MEASURE_PERFORMANCE:
-                sbatch_out, sbatch_err = process.communicate("#!/bin/bash\nperf stat -o logs/perf.{0} {1}".format(self.name, " ".join(self.command())))
+                qsub_out, qsub_err = process.communicate("#!/bin/bash\ncd $PBS_O_WORKDIR\nperf stat -o logs/perf.{0} {1}".format(self.name, " ".join(self.command())))
             else:
-                sbatch_out, sbatch_err = process.communicate("#!/bin/bash\n{0}".format(" ".join(self.command())))
+                qsub_out, qsub_err = process.communicate("#!/bin/bash\ncd $PBS_O_WORKDIR\n{0}".format(" ".join(self.command())))
 
-            if len(sbatch_err) == 0:
-                self.jobid = sbatch_out.split('.')[0]
+            print 'out:'
+            print qsub_out
+
+            print 'error'
+            print qsub_err
+
+            if len(qsub_err) == 0:
+                self.jobid = qsub_out.split('.')[0]
                 #print 'jobid={0}'.format(self.jobid)
 
         else:
@@ -133,6 +140,11 @@ class Job(object):
             dependency_string = ":".join(d.jobid for d in self.dependencies if not d.get_done())
             if len(dependency_string) > 0:
                 return ["-d", "afterok:" + dependency_string]
+            return []
+        elif USE_QSUB:
+            dependency_string = ":".join(d.jobid for d in self.dependencies if not d.get_done())
+            if len(dependency_string) > 0:
+                return ["-W", "depend=afterok:" + dependency_string]
             return []
         else:
             return " && ".join("done(%s)" % d.name for d in self.dependencies if not d.get_done())
@@ -256,8 +268,7 @@ class ClassifySubimage(Job):
         self.classifier_file = classifier_file
         self.time = 120
         self.coords = [str(c) for c in (top, left, height, width)]
-        self.prob_file = os.path.join('subimage_probabilities',
-                                      'probs_%d_%s.hdf5' % (idx, '_'.join(self.coords)))
+        self.output = os.path.join('subimage_probabilities', 'probs_%d_%s.hdf5' % (idx, '_'.join(self.coords)))
 
     def command(self):
         return ['python',

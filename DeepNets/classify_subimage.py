@@ -45,49 +45,43 @@ if __name__ == '__main__':
             network = DeepNetwork(model_path, batch_size=batch_size)
             #network = DeepNetwork(model_path)
 
-            if (os.path.exists(output_path)):
+            print 'Processing image {0}, {1}.'.format(img_in, (top, left, height, width))
 
-                print "Output file {0} already exists.".format(output_path)
+            input_image = np.array(Image.open(img_in))
+            nx, ny = input_image.shape
 
-            else:
+            # Find normalization settings for full image
+            sorted_image = np.sort( input_image.ravel() )
+            minval = np.float32( sorted_image[ len(sorted_image) * ( saturation_level / 2 ) ] )
+            maxval = np.float32( sorted_image[ len(sorted_image) * ( 1 - saturation_level / 2 ) ] )
 
-                print 'Processing image {0}, {1}.'.format(img_in, (top, left, height, width))
-                out_hdf5 = h5py.File(output_path, 'w')
+            # Pad
+            pad_by = network.pad_by
+            input_image = np.pad(input_image, ((pad_by, pad_by), (pad_by, pad_by)), 'symmetric')
 
-                input_image = np.array(Image.open(img_in))
-                nx, ny = input_image.shape
+            # Crop
+            input_image = input_image[top:top + height + 2 * pad_by, left:left + width + 2 * pad_by]
 
-                # Find normalization settings for full image
-                sorted_image = np.sort( input_image.ravel() )
-                minval = np.float32( sorted_image[ len(sorted_image) * ( saturation_level / 2 ) ] )
-                maxval = np.float32( sorted_image[ len(sorted_image) * ( 1 - saturation_level / 2 ) ] )
+            # Normalize cropped image as float
+            input_image = np.float32(input_image - minval) * ( 255 / (maxval - minval))
+            input_image[input_image < 0] = 0
+            input_image[input_image > 255] = 255
+            input_image = input_image / 255.0
 
-                # Pad
-                pad_by = network.pad_by
-                input_image = np.pad(input_image, ((pad_by, pad_by), (pad_by, pad_by)), 'symmetric')
+            start_time = time.time()
 
-                # Crop
-                input_image = input_image[top:top + height + 2 * pad_by, left:left + width + 2 * pad_by]
+            output = network.apply_net(input_image, perform_pad=False)
 
-                # Normalize cropped image as float
-                input_image = np.float32(input_image - minval) * ( 255 / (maxval - minval))
-                input_image[input_image < 0] = 0
-                input_image[input_image > 255] = 255
-                input_image = input_image / 255.0
+            print 'Deep net classify complete in {0:1.4f} seconds'.format(time.time() - start_time)
 
-                start_time = time.time()
+            # im = Image.fromarray(np.uint8(output * 255))
+            # im.save(output_path.replace('hdf5', 'tif'))
+            # print "Image saved."
 
-                output = network.apply_net(input_image, perform_pad=False)
-
-                print 'Deep net classify complete in {0:1.4f} seconds'.format(time.time() - start_time)
-
-                # im = Image.fromarray(np.uint8(output * 255))
-                # im.save(output_path.replace('hdf5', 'tif'))
-                # print "Image saved."
-
-                out_hdf5.create_dataset('probabilities', data = output, chunks = (64,64), compression = 'gzip')
-                out_hdf5.close()
-                print "Probabilities saved to: {0}".format(output_path)
+            out_hdf5 = h5py.File(output_path, 'w')
+            out_hdf5.create_dataset('probabilities', data = output, chunks = (64,64), compression = 'gzip')
+            out_hdf5.close()
+            print "Probabilities saved to: {0}".format(output_path)
 
         except IOError as e:
             print "I/O error({0}): {1}".format(e.errno, e.strerror)
