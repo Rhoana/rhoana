@@ -15,10 +15,13 @@ Debug = False
 
 try:
 
-    input_path = sys.argv[1]
-    output_path = sys.argv[2]
+    print ' '.join(sys.argv)
+
+    input_h5_path = sys.argv[1]
+    input_image_path = sys.argv[2]
+    output_path = sys.argv[3]
     
-    input_hdf5 = h5py.File(input_path, 'r')
+    input_hdf5 = h5py.File(input_h5_path, 'r')
     
     prob_image = input_hdf5['probabilities'][...]
     
@@ -37,10 +40,46 @@ try:
     minsize_range = np.array([300]*30)
     thresh_range = np.arange(0.1, 0.73, 0.63/30)
 
+    # Ignore black pixels in groups this size or larger
+    blankout_zero_regions = True
+    blankout_min_size = 300000
+
     # Load environment settings
     if 'CONNECTOME_SETTINGS' in os.environ:
         settings_file = os.environ['CONNECTOME_SETTINGS']
         execfile(settings_file)
+
+    blank_mask = None
+    if blankout_zero_regions:
+        im = mahotas.imread(input_image_path)
+        blank_areas = mahotas.label(im==0)
+        blank_sizes = mahotas.labeled.labeled_size(blank_areas[0])
+        blankable = np.nonzero(blank_sizes > blankout_min_size)[0]
+
+        # ignore background label
+        blankable = [i for i in blankable if i != 0]
+
+        if len(blankable) > 0:
+            blank_mask = np.zeros(prob_image.shape, dtype=np.bool)
+            for blank_label in blankable:
+                blank_mask[blank_areas[0]==blank_label] = 1
+
+            # Remove pixel dust
+            non_masked_labels = mahotas.label(blank_mask==0)
+            non_masked_sizes = mahotas.labeled.labeled_size(non_masked_labels[0])
+            too_small = np.nonzero(non_masked_sizes < np.min(minsize_range))
+            remap = np.arange(0, non_masked_labels[1]+1)
+            remap[too_small[0]] = 0
+            blank_mask[remap[non_masked_labels[0]] == 0] = 1
+
+            print 'Found {0} blankout areas.'.format(len(blankable))
+        else:
+            print 'No blankout areas found.'
+
+        # Cleanup
+        im = None
+        blank_areas = None
+        non_masked_labels = None
     
     n_segmentations = len(minsize_range)
     segmentation_count = 0
@@ -92,6 +131,9 @@ try:
 
         dx, dy = np.gradient(ws)
         ws_boundary = np.logical_or(dx!=0, dy!=0)
+
+        if blankout_zero_regions and blank_mask is not None:
+            ws_boundary[blank_mask] = 1
     
         segmentations[:,:,segmentation_count] = ws_boundary > 0
 
@@ -104,10 +146,17 @@ try:
     
     # move to final destination
     out_hdf5.close()
+
+    print 'Wrote to {0}.'.format(temp_path)
+    print os.path.exists(temp_path)
+
     # move to final location
     if os.path.exists(output_path):
         os.unlink(output_path)
     os.rename(temp_path, output_path)
+
+    print 'Renamed to {0}.'.format(output_path)
+    print os.path.exists(output_path)
 
     print "Success"
 

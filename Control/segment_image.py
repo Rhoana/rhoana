@@ -13,6 +13,8 @@ def check_file(filename):
     fkeys = f.keys()
     f.close()
     if set(fkeys) != set(['segmentations', 'probabilities']):
+        print 'Unexpected keys in {0}.'.format(filename)
+        print fkeys
         os.unlink(filename)
         return False
     return True
@@ -58,12 +60,12 @@ while repeat_attempt_i < job_repeat_attempts and not check_file(segmentations_fi
             subprocess.check_call(['python', classify_prog, image_file, stump_file, classifier, probabilities_file], env=os.environ)
 
         print "Computing segmentations:", segmentation_prog, probabilities_file, segmentations_file
-        subprocess.check_call(['python', segmentation_prog, probabilities_file, segmentations_file], env=os.environ)
+        subprocess.check_call(['python', segmentation_prog, probabilities_file, image_file, segmentations_file], env=os.environ)
 
     except IOError as e:
         print "I/O error({0}): {1}".format(e.errno, e.strerror)
     except KeyboardInterrupt:
-        pass
+        raise
     except:
         print "Unexpected error:", sys.exc_info()[0]
         if repeat_attempt_i == job_repeat_attempts:

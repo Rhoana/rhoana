@@ -10,6 +10,7 @@ from collections import defaultdict
 USE_SBATCH = True
 MEASURE_PERFORMANCE = False
 MAX_TRIES = 10
+RUN_LOCAL = False
 
 class Job(object):
     all_jobs = []
@@ -56,7 +57,9 @@ class Job(object):
         print " ".join(self.command())
         self.try_count += 1
 
-        if USE_SBATCH:
+        if RUN_LOCAL:
+            subprocess.check_call(self.command())
+        elif USE_SBATCH:
             command_list = ["sbatch",
                 "-J", self.name,                   # Job name
                 "-p", "serial_requeue",            # Work queue (partition) = general / unrestricted / interactive / serial_requeue
@@ -370,7 +373,8 @@ class CleanBlock(Job):
         self.block = fusedblock.block
         self.global_block_number = fusedblock.global_block_number
         self.dependencies = [fusedblock]
-        self.memory = 8000
+        self.memory = 6000
+        #self.memory = 8000
         self.time = 60
         self.inputlabels = fusedblock.output
         self.inputprobs = fusedblock.block.output
@@ -389,7 +393,8 @@ class PairwiseMatching(Job):
         self.halo_width = halo_width
         self.indices = (fusedblock1.indices, fusedblock2.indices)
         self.dependencies = [fusedblock1, fusedblock2]
-        self.memory = 16000
+        #self.memory = 16000
+        self.memory = 8000
         #self.memory = 4000
         self.time = 60
         outdir = 'pairwise_matches_%s_%s' % (['X', 'Y', 'Z',][direction], even_or_odd)
@@ -408,7 +413,7 @@ class JoinConcatenation(Job):
         self.already_done = False
         self.dependencies = inputs
         self.memory = 1000
-        self.time = 30
+        self.time = 60
         self.output = os.path.join('joins', outfilename)
         #self.already_done = os.path.exists(self.output)
         
@@ -437,7 +442,8 @@ class RemapBlock(Job):
         self.already_done = False
         self.dependencies = [blockjob, build_remap_job]
         #self.memory = 2000
-        self.memory = 8000
+        self.memory = 4000
+        #self.memory = 8000
         self.time = 60
         self.inputfile = blockjob.output
         self.mapfile = build_remap_job.output
@@ -467,7 +473,7 @@ class ExtractLabelPlane(Job):
         self.already_done = False
         self.dependencies = remapped_blocks
         self.memory = 1000
-        self.time = 40
+        self.time = 60
         self.zoffset = zoffset
         self.xy_halo = xy_halo
         self.image_size = image_size
@@ -492,7 +498,7 @@ class ExtractOverlayPlane(Job):
         self.already_done = False
         self.dependencies = remapped_blocks
         self.memory = 4000
-        self.time = 40
+        self.time = 60
         self.zoffset = zoffset
         self.xy_halo = xy_halo
         self.image_size = image_size
@@ -662,6 +668,9 @@ if __name__ == '__main__':
     #                                    image_size, block_xy_size)
     #                  for idx, _ in enumerate(segmentations)]
 
+    if '-l' in sys.argv:
+        RUN_LOCAL = True
+        sys.argv.remove('-l')
     if len(sys.argv) == 3:
         Job.run_all()
     elif sys.argv[3] == '-k' or sys.argv[3] == '--keeprunning' or sys.argv[3] == 'keeprunning':
@@ -673,4 +682,4 @@ if __name__ == '__main__':
                     if k.output != sys.argv[3] and sys.argv[3] not in k.output and sys.argv[3] not in k.output[0] and sys.argv[3] not in k.name:
                         k.already_done = True
                 j.run()
-                
+    
