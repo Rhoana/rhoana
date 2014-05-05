@@ -8,15 +8,28 @@ from itertools import product
 from collections import defaultdict
 
 USE_SBATCH = True
+
+USE_QSUB = False
+QSUB_WORK_QUEUE = 'normal'
+
 MEASURE_PERFORMANCE = False
 MAX_TRIES = 10
 RUN_LOCAL = False
 
+#Multicore settings
+MAX_CORES = 16
+MAX_MEMORY_MB = 64000
+MIN_TIME = 600
+MAX_JOBS_TO_SUBMIT = 100
+TIME_FACTOR = 4
+
 class Job(object):
+    block_count = 0
     all_jobs = []
 
     def __init__(self):
         self.name = self.__class__.__name__ + str(len(Job.all_jobs)) + '_' + datetime.datetime.now().isoformat()
+        self.jobid = None
         self.output = []
         self.already_done = False
         self.processors = 1
@@ -119,6 +132,183 @@ class Job(object):
     def run_all(cls):
         for j in cls.all_jobs:
             j.run()
+
+    @classmethod
+    def run_job_blocks(cls, job_block_list, required_cores, required_memory, required_full_time):
+        block_name = 'JobBlock{0}.'.format(cls.block_count) + job_block_list[0][0].name
+        cls.block_count += 1
+        print "RUNNING JOB BLOCK: " + block_name
+        print "{0} blocks, {1} jobs, {2} cores, {3}MB memory, {4}m time.".format(
+            len(job_block_list), [len(jb) for jb in job_block_list], required_cores, required_memory, required_full_time)
+        full_command = "#!/bin/bash\n"
+        dependency_set = set()
+
+        # Find all dependencies for all jobs
+        for job_block in job_block_list:
+            for j in job_block:
+                for d in j.dependencies:
+                    if not d.get_done() and d.jobid is not None:
+                        if USE_SBATCH or USE_QSUB:
+                            dependency_set.add(d.jobid)
+                        # else:
+                        #     dependency_set.add(d.name)
+
+        if USE_SBATCH:
+            command_list = ["sbatch",
+                "-J", block_name,                   # Job name
+                "-p", "serial_requeue",            # Work queue (partition) = general / unrestricted / interactive / serial_requeue
+                #"-p", "general",                   # Work queue (partition) = general / unrestricted / interactive / serial_requeue
+                "--requeue",
+                #"--exclude=holy2b05105,hp1301,hp0403",           # Exclude some bad nodes - holy2b05105 did not have scratch2 mapped.
+                "-n", str(required_cores),        # Number of processors
+                "-t", str(required_full_time),              # Time in munites 1440 = 24 hours
+                "--mem-per-cpu", str(required_memory), # Max memory in MB (strict - attempts to allocate more memory will fail)
+                "--open-mode=append",              # Append to log files
+                "-o", "logs/out." + block_name,     # Standard out file
+                "-e", "logs/error." + block_name]   # Error out file
+
+        elif USE_QSUB:
+            command_list = ["qsub"]#,
+                # "-N", block_name,                   # Job name
+                # "-A", 'hvd113',                    # XSEDE Allocation
+                # "-q", QSUB_WORK_QUEUE,                    # Work queue (partition) = general / unrestricted / interactive / serial_requeue
+                # "-l", 'nodes=1:ppn={0},walltime={1}:00'.format(str(required_cores), required_full_time),  # Number of processors
+                # #"-l", 'walltime={0}:00'.format(self.time),             # Time in munites 1440 = 24 hours
+                # #"-l", '-mppmem={0}'.format(self.memory),               # Max memory per cpu in MB (strict - attempts to allocate more memory will fail)
+                # "-e", "logs/outerror." + block_name('_')[0],      # Error out file
+                # "-j", "eo"]                                            # Join standard out file to error file
+
+            # Better to use file input rather than command line inputs (according to XSEDE helpdesk)
+            # Request MAX_CORES so that memory requirement is also met
+            full_command += (
+               "#PBS -N {0}\n".format(block_name) +
+               "#PBS -A hvd113\n" +
+               "#PBS -q {0}\n".format(QSUB_WORK_QUEUE) +
+               "#PBS -l nodes=1:ppn={0}:native,walltime={1}:00\n".format(str(MAX_CORES), required_full_time) +
+               "#PBS -e logs/outerror.{0}\n".format(block_name.split('_')[0]) +
+               "#PBS -j eo\n")
+
+        if len(dependency_set) > 0:
+            if USE_SBATCH:
+                dependency_string = ":".join(d for d in dependency_set)
+                if len(dependency_string) > 0:
+                    print "depends on jobs:" + dependency_string
+                    command_list += ["-d", "afterok:" + dependency_string]
+            elif USE_QSUB:
+                dependency_string = ":".join(d for d in dependency_set)
+                if len(dependency_string) > 0:
+                    print "depends on jobs:" + dependency_string
+                    full_command += "#PBS -W depend=afterok:" + dependency_string + "\n"
+            else:
+                command_list += " && ".join("done(%s)" % d for d in dependency_set)
+
+        if USE_SBATCH:
+            full_command += "date\n"
+        elif USE_QSUB:
+            full_command += "cd $PBS_O_WORKDIR\ndate\n"
+
+        # Generate job block commands
+        for job_block in job_block_list:
+            block_commands = ''
+            for j in job_block:
+                block_commands += '{0} &\n'.format(' '.join(j.command()))
+                print j.name
+            full_command += '{0}wait\ndate\n'.format(block_commands)
+
+        # # Test job ids
+        # for job_block in job_block_list:
+        #     for j in job_block:
+        #         j.jobid = str(cls.block_count - 1)
+
+        # print command_list
+        # print full_command
+
+        # Submit job
+        process = subprocess.Popen(command_list, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        submit_out, submit_err = process.communicate(full_command)
+
+        # Process output
+        if len(submit_err) == 0:
+            if USE_SBATCH:
+                new_jobid = submit_out.split()[3]
+            elif USE_QSUB:
+                new_jobid = submit_out.split('.')[0]
+            print 'jobid={0}'.format(new_jobid)
+            for job_block in job_block_list:
+                for j in job_block:
+                    j.jobid = new_jobid
+
+    @classmethod
+    def multicore_run_all(cls):
+        jobs_submitted = 0
+        job_block_list = [[]]
+        required_cores = 0
+        required_memory = 0
+        required_full_time = 0
+        required_block_time = 0
+        for j in cls.all_jobs:
+
+            # Make sure output directories exist
+            out = j.output
+            if isinstance(out, basestring):
+                out = [out]
+            for f in out:
+                if not os.path.isdir(os.path.dirname(f)):
+                    os.mkdir(os.path.dirname(f))
+
+            if j.get_done():
+                continue
+
+            # Check dependencies
+            contains_dependent = False
+            for d in j.dependencies:
+                if isinstance(d, JobSplit):
+                    d = d.job
+                if d in job_block_list[-1]:
+                    contains_dependent = True
+                    break
+
+            # See if we can fit this job into the current multicore job
+            if (not contains_dependent and required_cores + j.processors <= MAX_CORES and
+                required_memory + j.memory <= MAX_MEMORY_MB):
+                # Add this job to the job list
+                required_cores += j.processors
+                required_memory += j.memory
+                required_block_time = max(required_block_time, j.time)
+                job_block_list[-1].append(j)
+            else:
+                #print (contains_dependent, required_cores, required_memory)
+                #print (j.processors, j.memory)
+                # This block is full - run it or add another
+                required_full_time += required_block_time / TIME_FACTOR
+                # See if we need more jobs to fill the time
+                if (not contains_dependent and required_full_time < MIN_TIME):
+                    # Start a new block of jobs
+                    job_block_list.append([j])
+                    required_cores = j.processors
+                    required_memory = j.memory
+                    required_block_time = j.time
+                else:
+                    # Run the current job block list
+                    Job.run_job_blocks(job_block_list, required_cores, required_memory, required_full_time)
+
+                    # Limit number of jobs submitted at once
+                    jobs_submitted += 1
+                    if MAX_JOBS_TO_SUBMIT > 0 and jobs_submitted >= MAX_JOBS_TO_SUBMIT:
+                        return
+
+                    # Reset for next block
+                    job_block_list = [[j]]
+                    required_cores = j.processors
+                    required_memory = j.memory
+                    required_full_time = 0
+                    required_block_time = j.time
+
+        # Run the final (possibly partial) job block list
+        if len(job_block_list[0]) > 0:
+            required_full_time += required_block_time
+            Job.run_job_blocks(job_block_list, required_cores, required_memory, required_full_time)
+
 
     @classmethod
     def keep_running(cls):
@@ -304,7 +494,7 @@ class Subimage_SegmentedSlice(Job):
         return ['python', 'segment_image.py', self.raw_image, self.probability_map.output, self.output] + \
             self.coords + self.core_coords
 
-class ClassifySegement_Image(Job):
+class ClassifySegment_Image(Job):
     def __init__(self, idx, raw_image, classifier_file):
         Job.__init__(self)
         self.already_done = False
@@ -567,7 +757,7 @@ if __name__ == '__main__':
 
     images = [f.rstrip() for f in open(sys.argv[2])]
 
-    segmentations = [ClassifySegement_Image(idx, im, classifier_file)
+    segmentations = [ClassifySegment_Image(idx, im, classifier_file)
                     for idx, im in enumerate(images)]
 
     #segmentations = [f.rstrip() for f in open(sys.argv[2])]
@@ -676,10 +866,20 @@ if __name__ == '__main__':
     if '-l' in sys.argv:
         RUN_LOCAL = True
         sys.argv.remove('-l')
+    if '--local' in sys.argv:
+        RUN_LOCAL = True
+        sys.argv.remove('--local')
     if len(sys.argv) == 3:
         Job.run_all()
-    elif sys.argv[3] == '-k' or sys.argv[3] == '--keeprunning' or sys.argv[3] == 'keeprunning':
+    elif '-k' in sys.argv or '--keeprunning' in sys.argv:
+        # Monitor job status and requeue as necessary
         Job.keep_running()
+    elif '-m' in sys.argv or '--multicore' in sys.argv:
+        if RUN_LOCAL:
+            print "ERROR: --local cannot be used with --multicore (not yet implemented)."
+            return
+        # Bundle jobs for multicore nodes
+        Job.multicore_run_all()
     else:
         for j in Job.all_jobs:
             if j.output == sys.argv[3] or sys.argv[3] in j.output or sys.argv[3] in j.output[0] or sys.argv[3] in j.name:
@@ -687,4 +887,5 @@ if __name__ == '__main__':
                     if k.output != sys.argv[3] and sys.argv[3] not in k.output and sys.argv[3] not in k.output[0] and sys.argv[3] not in k.name:
                         k.already_done = True
                 j.run()
+
     
