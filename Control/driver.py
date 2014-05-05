@@ -575,13 +575,16 @@ if __name__ == '__main__':
     
     # Dice full volume
     blocks = {}
-    for block_idx_z in range((len(segmentations) - 2 * block_z_halo) / block_z_size):
+    nblocks_x = (image_size - 2 * block_xy_halo) / block_xy_size
+    nblocks_y = (image_size - 2 * block_xy_halo) / block_xy_size
+    nblocks_z = (len(segmentations) - 2 * block_z_halo) / block_z_size
+    for block_idx_z in range(nblocks_z):
         lo_slice = block_idx_z * block_z_size
         hi_slice = lo_slice + block_z_size + 2 * block_z_halo
-        for block_idx_x in range((image_size - 2 * block_xy_halo) / block_xy_size):
+        for block_idx_x in range(nblocks_x):
             xlo = block_idx_x * block_xy_size
             xhi = xlo + block_xy_size + 2 * block_xy_halo
-            for block_idx_y in range((image_size - 2 * block_xy_halo) / block_xy_size):
+            for block_idx_y in range(nblocks_y):
                 ylo = block_idx_y * block_xy_size
                 yhi = ylo + block_xy_size + 2 * block_xy_halo
                 print "Making block {0}, slice {1}, crop {2}.".format(
@@ -594,7 +597,9 @@ if __name__ == '__main__':
                           xlo, ylo, xhi, yhi)
 
     # Window fuse all blocks
-    fused_blocks = dict((idxs, FusedBlock(block, idxs, num)) for num, (idxs, block) in enumerate(blocks.iteritems()))
+    # Generate block id based on on block index with z as most significant (allows additional slabs to be added later)
+    fused_blocks = dict((idxs, FusedBlock(block, idxs,
+        idxs[0] + idxs[1] * nblocks_x + idxs[2] * nblocks_x * nblocks_y)) for (idxs, block) in blocks.iteritems())
 
     # Cleanup all blocks (remove small or completely enclosed segments)
     cleaned_blocks = dict((idxs, CleanBlock(fb)) for idxs, fb in fused_blocks.iteritems())
