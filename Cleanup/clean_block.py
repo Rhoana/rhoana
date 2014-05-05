@@ -32,7 +32,21 @@ input_labels = sys.argv[1]
 input_probs = sys.argv[2]
 output_path = sys.argv[3]
 
+# Default settings
 minsegsize = 500
+
+repair_branches = False
+branch_min_overlap_ratio = 0.9
+branch_min_total_area_ratio = 0.005
+
+repair_skips = False
+# (maximum_link_distance is from the fusion settings)
+maximum_link_distance = 1
+
+# Load environment settings
+if 'CONNECTOME_SETTINGS' in os.environ:
+    settings_file = os.environ['CONNECTOME_SETTINGS']
+    execfile(settings_file)
 
 repeat_attempt_i = 0
 while repeat_attempt_i < job_repeat_attempts and not check_file(output_path):
@@ -66,16 +80,7 @@ while repeat_attempt_i < job_repeat_attempts and not check_file(output_path):
             # Grow labels so there are no boundary pixels
             for image_i in range(packed_vol.shape[2]):
                 label_image = packed_vol[:,:,image_i]
-                if np.all(label_image==0):
-                    continue
-
-                label_image = mahotas.cwatershed(np.zeros(label_image.shape, dtype=np.uint32), label_image, return_lines=False)
-
-                #Sanity check - mahotas error when cwatershed is called with all 0 values
-                #TODO: check mahotas cwatershed bug for blank (all zero) images
-                label_image[label_image >= nlabels] = 0
-
-                packed_vol[:,:,image_i] = label_image
+                packed_vol[:,:,image_i] = mahotas.cwatershed(np.zeros(label_image.shape, dtype=np.uint32), label_image, return_lines=False)
 
             if Debug:
                 from libtiff import TIFF
@@ -197,9 +202,6 @@ while repeat_attempt_i < job_repeat_attempts and not check_file(output_path):
 
                 for segi in tojoin[0]:
 
-                        if segi == 0:
-                            continue
-
                         # Ignore segments bordering a cube wall
                         if (np.any(packed_vol[0,:,:] == segi) or np.any(packed_vol[-1,:,:] == segi) or
                             np.any(packed_vol[:,0,:] == segi) or np.any(packed_vol[:,-1,:] == segi) or
@@ -213,6 +215,74 @@ while repeat_attempt_i < job_repeat_attempts and not check_file(output_path):
                             join_segs(segi, neighbours[0])
 
                 print "Joined {0} singly connected segments.".format(len(tojoin))
+
+            # Remap for before checking for skip / branch repairs
+            packed_vol = remap_index[packed_vol]
+
+            # Skip-n repair
+            skip_repairs = 0
+            if repair_skips and maximum_link_distance > 1:
+                for begin_zi in range(packed_vol.shape[2] - maximum_link_distance):
+                    begin_labels = np.unique(packed_vol[:,:,begin_zi])
+                    next_labels = np.unique(packed_vol[:,:,begin_zi + 1])
+                    missing_labels = [lab for lab in begin_labels if lab not in next_labels]
+
+                    # Check for missing labels in each possible slice
+                    for skip_zi in range(begin_zi + 2, begin_zi + maximum_link_distance + 1):
+                        check_labels = np.unique(packed_vol[:,:,skip_zi])
+                        skipped_labels = [lab for lab in missing_labels if lab in check_labels]
+
+                        for skipped_label in skipped_labels:
+                            # Stamp overlap region into intermediate layers
+                            skip_overlap = np.logical_and(packed_vol[:,:,begin_zi] == skipped_label, packed_vol[:,:,skip_zi] == skipped_label)
+                            for stamp_zi in range(begin_zi + 1, skip_zi):
+                                packed_vol[:,:,stamp_zi][skip_overlap] = skipped_label
+                                #TODO: Check for pixel dust / watershed from seeds?
+                            skip_repairs += 1
+
+                print "Repaired {0} skips.".format(skip_repairs)
+
+            def check_branch(branch_label, from_slice, to_slice):
+                slice_area = np.float(np.prod(from_slice.shape))
+                branch_area = from_slice == branch_label
+                branch_area_size = np.float(np.sum(branch_area))
+
+                if branch_area_size / slice_area < branch_min_total_area_ratio:
+                    return 0
+
+                branch_overlap_counts = np.bincount(to_slice[branch_area])
+                best_match = np.argmax(branch_overlap_counts)
+
+                proportion_branch = branch_overlap_counts[best_match] / branch_area_size
+                #proportion_partner = branch_overlap_counts[best_match] / float(np.sum(to_slice == best_match))
+
+                if proportion_branch >= branch_min_overlap_ratio:
+                    join_segs(branch_label, best_match)
+                    print "Label {0} branch-matched to label {1} at z={2}.".format(branch_label, best_match, begin_zi)
+                    return 1
+                return 0
+
+            # Check for branches
+            branch_repairs = 0
+            if repair_branches:
+                for begin_zi in range(packed_vol.shape[2] - 1):
+                    slice0 = packed_vol[:,:,begin_zi]
+                    slice1 = packed_vol[:,:,begin_zi+1]
+                    labels0 = np.unique(slice0)
+                    labels1 = np.unique(slice1)
+                    missing_labels0 = [lab for lab in labels0 if lab not in labels1]
+                    missing_labels1 = [lab for lab in labels1 if lab not in labels0]
+
+                    slice_area = np.float(np.prod(slice0.shape))
+
+                    # Check each missing label for a potential branch
+                    for check_label0 in missing_labels0:
+                        branch_repairs += check_branch(check_label0, slice0, slice1)
+
+                    for check_label1 in missing_labels1:
+                        branch_repairs += check_branch(check_label1, slice1, slice0)
+
+                print "Repaired {0} branches.".format(branch_repairs)
 
             print "Remapping {0} segments to {1} supersegments.".format(nlabels, len(np.unique(remap_index)))
 
