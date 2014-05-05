@@ -9,6 +9,7 @@ from collections import defaultdict
 
 USE_SBATCH = True
 MEASURE_PERFORMANCE = False
+MAX_TRIES = 10
 
 class Job(object):
     all_jobs = []
@@ -20,6 +21,7 @@ class Job(object):
         self.processors = 1
         self.time = 60
         self.memory = 1000
+        self.try_count = 0
         Job.all_jobs.append(self)
 
     def get_done(self):
@@ -47,8 +49,12 @@ class Job(object):
                 os.mkdir(os.path.dirname(f))
         if self.get_done():
            return 0
+        if self.try_count >= MAX_TRIES:
+            return 0
+
         print "RUN", self.name
         print " ".join(self.command())
+        self.try_count += 1
 
         if USE_SBATCH:
             command_list = ["sbatch",
@@ -114,6 +120,8 @@ class Job(object):
     @classmethod
     def keep_running(cls):
         all_jobs_complete = False
+        cancelled_jobs = {}
+        cancelled_requeue_iters = 3
         while not all_jobs_complete:
 
             all_job_names = {}
@@ -122,7 +130,7 @@ class Job(object):
                 all_job_names[j.name] = True
 
             # Find running jobs
-            sacct_output = subprocess.check_output(['sacct', '-n', '-o', 'JobID,JobName%100,State,NodeList'])
+            sacct_output = subprocess.check_output(['sacct', '-n', '-o', 'JobID,JobName%100,State%20'])
 
             pending_running_complete_jobs = {}
             pending = 0
@@ -142,15 +150,31 @@ class Job(object):
 
                 job_id = job_split[0]
                 job_name = job_split[1]
-                job_status = job_split[2]
-                node = job_split[3]
+                job_status = ' '.join(job_split[2:])
                 
                 if job_name in all_job_names:
                     if job_status in ['PENDING', 'RUNNING', 'COMPLETED']:
                         if job_name in pending_running_complete_jobs:
                             print 'Found duplicate job: ' + job_name
+                            dup_job_id, dup_job_status = pending_running_complete_jobs[job_name]
+                            print job_id, job_status, dup_job_id, dup_job_status
+
+                            job_to_kill = None
+                            if job_status == 'PENDING':
+                                job_to_kill = job_id
+                            elif dup_job_status == 'PENDING':
+                                job_to_kill = dup_job_id
+                                pending_running_complete_jobs[job_name] = (job_id, job_status)    
+
+                            if job_to_kill is not None:
+                                print 'Canceling job ' + job_to_kill
+                                try:
+                                    scancel_output = subprocess.check_output(['scancel', '{0}'.format(job_to_kill)])
+                                    print scancel_output
+                                except:
+                                    print "Error canceling job:", sys.exc_info()[0]
                         else:
-                            pending_running_complete_jobs[job_name] = True
+                            pending_running_complete_jobs[job_name] = (job_id, job_status)
                             if job_status == 'PENDING':
                                 pending += 1
                             elif job_status == 'RUNNING':
@@ -159,8 +183,19 @@ class Job(object):
                                 complete += 1
                     elif job_status in ['FAILED', 'NODE_FAIL']:
                         failed += 1
-                    elif job_status in ['CANCELLED', 'CANCELLED+']:
+                    elif job_status in ['CANCELLED', 'CANCELLED+'] or job_status.startswith('CANCELLED'):
                         cancelled += 1
+
+                        # This job could requeued after preemption
+                        # Wait cancelled_requeue_iters before requeueing
+                        cancelled_iters = 0
+                        if job_id in cancelled_jobs:
+                            cancelled_iters = cancelled_jobs[job_id]
+
+                        if cancelled_iters < cancelled_requeue_iters:
+                            pending_running_complete_jobs[job_name] = (job_id, job_status)
+                            cancelled_jobs[job_id] = cancelled_iters + 1
+
                     elif job_status in ['TIMEOUT']:
                         timeout += 1
                     else:
@@ -274,8 +309,8 @@ class ClassifySegement_Image(Job):
         self.stump_image = raw_image.replace('input_images', 'stump_images')
         self.classifier_file = classifier_file
         self.dependencies = []
-        self.memory = 4000
-        self.time = 120
+        self.memory = 8000
+        self.time = 300
         self.features_file = os.path.join('segmentations',
                                       'features_%d.hdf5' % (idx))
         self.prob_file = os.path.join('segmentations',
@@ -295,7 +330,7 @@ class Block(Job):
         self.already_done = False
         self.segmented_slices = segmented_slices
         self.dependencies = segmented_slices
-        self.memory = 4000
+        self.memory = 500
         self.time = 30
         self.output = os.path.join('bigdicedblocks', 'block_%d_%d_%d.hdf5' % indices)
         self.args = [str(a) for a in args] + [self.output]
@@ -313,7 +348,9 @@ class FusedBlock(Job):
         self.dependencies = [block]
         self.processors = 4
         self.memory = 16000
-        self.time = 360
+        # memory is per proc, so we are requesting 64GB here (and sometimes use it)
+        #self.time = 360
+        self.time = 480
         self.indices = indices
         self.output = os.path.join('bigfusedblocks', 'fusedblock_%d_%d_%d.hdf5' % indices)
         #self.already_done = os.path.exists(self.output)
@@ -333,8 +370,7 @@ class CleanBlock(Job):
         self.block = fusedblock.block
         self.global_block_number = fusedblock.global_block_number
         self.dependencies = [fusedblock]
-        #self.memory = 4000
-        self.memory = 16000
+        self.memory = 8000
         self.time = 60
         self.inputlabels = fusedblock.output
         self.inputprobs = fusedblock.block.output
@@ -353,8 +389,8 @@ class PairwiseMatching(Job):
         self.halo_width = halo_width
         self.indices = (fusedblock1.indices, fusedblock2.indices)
         self.dependencies = [fusedblock1, fusedblock2]
-        #self.memory = 4000
         self.memory = 16000
+        #self.memory = 4000
         self.time = 60
         outdir = 'pairwise_matches_%s_%s' % (['X', 'Y', 'Z',][direction], even_or_odd)
         self.output = (os.path.join(outdir, os.path.basename(fusedblock1.output)),
@@ -371,7 +407,7 @@ class JoinConcatenation(Job):
         Job.__init__(self)
         self.already_done = False
         self.dependencies = inputs
-        self.memory = 16000
+        self.memory = 1000
         self.time = 30
         self.output = os.path.join('joins', outfilename)
         #self.already_done = os.path.exists(self.output)
@@ -386,7 +422,7 @@ class GlobalRemap(Job):
         Job.__init__(self)
         self.already_done = False
         self.dependencies = [joinjob]
-        self.memory = 32000
+        self.memory = 1000
         self.time = 60
         self.joinfile = joinjob.output
         self.output = os.path.join('joins', outfilename)
@@ -400,7 +436,8 @@ class RemapBlock(Job):
         Job.__init__(self)
         self.already_done = False
         self.dependencies = [blockjob, build_remap_job]
-        self.memory = 4000
+        #self.memory = 2000
+        self.memory = 8000
         self.time = 60
         self.inputfile = blockjob.output
         self.mapfile = build_remap_job.output
@@ -429,8 +466,8 @@ class ExtractLabelPlane(Job):
         Job.__init__(self)
         self.already_done = False
         self.dependencies = remapped_blocks
-        self.memory = 4000
-        self.time = 30
+        self.memory = 1000
+        self.time = 40
         self.zoffset = zoffset
         self.xy_halo = xy_halo
         self.image_size = image_size
@@ -455,7 +492,7 @@ class ExtractOverlayPlane(Job):
         self.already_done = False
         self.dependencies = remapped_blocks
         self.memory = 4000
-        self.time = 30
+        self.time = 40
         self.zoffset = zoffset
         self.xy_halo = xy_halo
         self.image_size = image_size

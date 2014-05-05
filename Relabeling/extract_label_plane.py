@@ -3,11 +3,12 @@ import sys
 import numpy as np
 import h5py
 from libtiff import TIFF
+import shutil
 
 job_repeat_attempts = 5
 
 def check_file(filename):
-    if not os.path.exists(filename) or os.path.getsize(filename) == 0:
+    if not os.path.exists(filename) or os.path.getsize(filename) <= 8:
         return False
     return True
 
@@ -67,8 +68,11 @@ if __name__ == '__main__':
 
                 output_image[xbase:xend, ybase:yend] = data[xfrom_base:xfrom_end, yfrom_base:yfrom_end, zoffset]
 
-            tif = TIFF.open(output_path, mode='w')
+            tif = TIFF.open(output_path + '_partial', mode='w')
             tif.write_image(np.rot90(output_image), compression='lzw')
+            tif.close()
+
+            shutil.move(output_path + '_partial', output_path)
             
         except IOError as e:
             print "I/O error({0}): {1}".format(e.errno, e.strerror)

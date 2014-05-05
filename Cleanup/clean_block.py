@@ -32,6 +32,8 @@ input_labels = sys.argv[1]
 input_probs = sys.argv[2]
 output_path = sys.argv[3]
 
+minsegsize = 500
+
 repeat_attempt_i = 0
 while repeat_attempt_i < job_repeat_attempts and not check_file(output_path):
 
@@ -64,7 +66,16 @@ while repeat_attempt_i < job_repeat_attempts and not check_file(output_path):
             # Grow labels so there are no boundary pixels
             for image_i in range(packed_vol.shape[2]):
                 label_image = packed_vol[:,:,image_i]
-                packed_vol[:,:,image_i] = mahotas.cwatershed(np.zeros(label_image.shape, dtype=np.uint32), label_image, return_lines=False)
+                if np.all(label_image==0):
+                    continue
+
+                label_image = mahotas.cwatershed(np.zeros(label_image.shape, dtype=np.uint32), label_image, return_lines=False)
+
+                #Sanity check - mahotas error when cwatershed is called with all 0 values
+                #TODO: check mahotas cwatershed bug for blank (all zero) images
+                label_image[label_image >= nlabels] = 0
+
+                packed_vol[:,:,image_i] = label_image
 
             if Debug:
                 from libtiff import TIFF
@@ -159,7 +170,6 @@ while repeat_attempt_i < job_repeat_attempts and not check_file(output_path):
 
             # Join segments that are too small
             join_order = np.argsort(label_sizes)
-            minsegsize = 500
             joini = 0
 
             if len(join_order) > 0:
@@ -186,6 +196,9 @@ while repeat_attempt_i < job_repeat_attempts and not check_file(output_path):
                 tojoin = np.asarray(np.nonzero(nconnections == 1)[1])
 
                 for segi in tojoin[0]:
+
+                        if segi == 0:
+                            continue
 
                         # Ignore segments bordering a cube wall
                         if (np.any(packed_vol[0,:,:] == segi) or np.any(packed_vol[-1,:,:] == segi) or

@@ -54,7 +54,10 @@ if __name__ == '__main__':
             # pack values - every value now either maps to itself (and should get its
             # own label), or it maps to some lower value (which will have already been
             # mapped to its final value in this loop).
+            remap[0] = 0
             for v in sorted(remap.keys()):
+                if v == 0:
+                    continue
                 if remap[v] == v:
                     remap[v] = next_label
                     next_label += 1

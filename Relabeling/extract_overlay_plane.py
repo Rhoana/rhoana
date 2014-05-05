@@ -4,6 +4,7 @@ import numpy as np
 import h5py
 from libtiff import TIFF
 import mahotas
+import shutil
 
 job_repeat_attempts = 5
 
@@ -91,12 +92,17 @@ if __name__ == '__main__':
                 overlay_colors[:,:,ci][boundaries] = 128
 
             current_image_f = np.float32(mahotas.imread(input_image_path)[:output_size, :output_size])
+            
+            if len(current_image_f.shape) == 3:
+                current_image_f = current_image_f[:,:,0]
 
             overlay_colors[:,:,0] = (1-alpha) * overlay_colors[:,:,0] + alpha * current_image_f
             overlay_colors[:,:,1] = (1-alpha) * overlay_colors[:,:,1] + alpha * current_image_f
             overlay_colors[:,:,2] = (1-alpha) * overlay_colors[:,:,2] + alpha * current_image_f
 
-            mahotas.imsave(output_path, overlay_colors)
+            mahotas.imsave(output_path.replace('.', '_partial.', 1), overlay_colors)
+
+            shutil.move(output_path.replace('.', '_partial.', 1), output_path)
 
             # tif = TIFF.open(output_path, mode='w')
             # tif.write_image(overlay_colors, compression='lzw')

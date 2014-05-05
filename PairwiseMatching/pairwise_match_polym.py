@@ -30,6 +30,9 @@ Debug = False
 single_image_matching = True
 max_poly_matches = 1
 
+partner_min_total_area_ratioZ = None
+orphan_min_total_area_ratioZ = None
+
 # Load environment settings
 if 'CONNECTOME_SETTINGS' in os.environ:
     settings_file = os.environ['CONNECTOME_SETTINGS']
@@ -46,6 +49,11 @@ halo_size = int(halo_size)
 # adjacent in X, Y, Z).  Block1 is always closer to the 0,0,0 corner of the
 # volume.
 ###############################
+if direction == 3:
+    if partner_min_total_area_ratioZ is not None:
+        partner_min_total_area_ratio = partner_min_total_area_ratioZ
+    if orphan_min_total_area_ratioZ is not None:
+        orphan_min_total_area_ratio = orphan_min_total_area_ratioZ
 
 repeat_attempt_i = 0
 while repeat_attempt_i < job_repeat_attempts and not (

@@ -36,6 +36,9 @@ join_orphans = True
 orphan_min_overlap_ratio = 0.9
 orphan_min_total_area_ratio = 0.001
 
+partner_min_total_area_ratioZ = None
+orphan_min_total_area_ratioZ = None
+
 # Load environment settings
 if 'CONNECTOME_SETTINGS' in os.environ:
     settings_file = os.environ['CONNECTOME_SETTINGS']
@@ -52,6 +55,14 @@ halo_size = int(halo_size)
 # adjacent in X, Y, Z).  Block1 is always closer to the 0,0,0 corner of the
 # volume.
 ###############################
+
+if direction == 3:
+    if partner_min_total_area_ratioZ is not None:
+        print 'using Z-specific partner_min_total_area_ratioZ {0}'.format(partner_min_total_area_ratioZ)
+        partner_min_total_area_ratio = partner_min_total_area_ratioZ
+    if orphan_min_total_area_ratioZ is not None:
+        print 'using Z-specific orphan_min_total_area_ratioZ {0}'.format(orphan_min_total_area_ratioZ)
+        orphan_min_total_area_ratio = orphan_min_total_area_ratioZ
 
 repeat_attempt_i = 0
 while repeat_attempt_i < job_repeat_attempts and not (
