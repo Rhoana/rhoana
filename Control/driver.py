@@ -17,18 +17,19 @@ MAX_TRIES = 10
 RUN_LOCAL = False
 
 #Multicore settings
-MAX_CORES = 16
-MAX_MEMORY_MB = 64000
-MIN_TIME = 600
+MAX_CORES = 4
+MAX_MEMORY_MB = 16000
+MIN_TIME = 480
 MAX_JOBS_TO_SUBMIT = 100
-TIME_FACTOR = 4
+TIME_FACTOR = 1
 
 class Job(object):
     block_count = 0
     all_jobs = []
 
     def __init__(self):
-        self.name = self.__class__.__name__ + str(len(Job.all_jobs)) + '_' + datetime.datetime.now().isoformat()
+        # Allow for recovery if driver script fails - use deterministic job names.
+        self.name = os.path.split(os.getcwd())[1] + '.' + self.__class__.__name__ + str(len(Job.all_jobs)) # + '_' + datetime.datetime.now().isoformat()
         self.jobid = None
         self.output = []
         self.already_done = False
@@ -238,15 +239,20 @@ class Job(object):
                 for j in job_block:
                     j.jobid = new_jobid
 
+        return block_name
+
     @classmethod
-    def multicore_run_all(cls):
-        jobs_submitted = 0
+    def multicore_run_list(cls, runnable_jobs):
+        submit_count = 0
+        submitted_job_blocks = {}
         job_block_list = [[]]
         required_cores = 0
         required_memory = 0
+        required_full_cores = 0
+        required_full_memory = 0
         required_full_time = 0
         required_block_time = 0
-        for j in cls.all_jobs:
+        for j in runnable_jobs:
 
             # Make sure output directories exist
             out = j.output
@@ -280,6 +286,8 @@ class Job(object):
                 #print (contains_dependent, required_cores, required_memory)
                 #print (j.processors, j.memory)
                 # This block is full - run it or add another
+                required_full_cores = max(required_full_cores, required_cores)
+                required_full_memory = max(required_full_memory, required_memory)
                 required_full_time += required_block_time / TIME_FACTOR
                 # See if we need more jobs to fill the time
                 if (not contains_dependent and required_full_time < MIN_TIME):
@@ -290,25 +298,159 @@ class Job(object):
                     required_block_time = j.time
                 else:
                     # Run the current job block list
-                    Job.run_job_blocks(job_block_list, required_cores, required_memory, required_full_time)
-
-                    # Limit number of jobs submitted at once
-                    jobs_submitted += 1
-                    if MAX_JOBS_TO_SUBMIT > 0 and jobs_submitted >= MAX_JOBS_TO_SUBMIT:
-                        return
+                    block_name = Job.run_job_blocks(job_block_list, required_full_cores, required_full_memory, required_full_time)
+                    submitted_job_blocks[block_name] = job_block_list
 
                     # Reset for next block
                     job_block_list = [[j]]
                     required_cores = j.processors
                     required_memory = j.memory
+                    required_full_cores = 0
+                    required_full_memory = 0
                     required_full_time = 0
                     required_block_time = j.time
+                    
+                    # Limit number of jobs submitted at once
+                    submit_count += 1
+                    if MAX_JOBS_TO_SUBMIT > 0 and submit_count >= MAX_JOBS_TO_SUBMIT:
+                        break
 
         # Run the final (possibly partial) job block list
         if len(job_block_list[0]) > 0:
+            required_full_cores = max(required_full_cores, required_cores)
+            required_full_memory = max(required_full_memory, required_memory)
             required_full_time += required_block_time
-            Job.run_job_blocks(job_block_list, required_cores, required_memory, required_full_time)
+            block_name = Job.run_job_blocks(job_block_list, required_full_cores, required_full_memory, required_full_time)
+            submitted_job_blocks[block_name] = job_block_list
+            submit_count += 1
 
+        return submitted_job_blocks
+
+    @classmethod
+    def multicore_run_all(cls):
+        multicore_run_list(cls.all_jobs)
+
+    @classmethod
+    def multicore_keep_running(cls):
+        all_jobs_complete = False
+        cancelled_jobs = {}
+        cancelled_requeue_iters = 5
+        submitted_job_blocks = {}
+
+        while not all_jobs_complete:
+
+            # Find running job blocks
+            sacct_output = subprocess.check_output(['sacct', '-n', '-o', 'JobID,JobName%100,State%20'])
+
+            pending_running_complete_job_blocks = {}
+            pending = 0
+            running = 0
+            complete = 0
+            failed = 0
+            cancelled = 0
+            timeout = 0
+            other_status = 0
+            non_matching = 0
+
+            for job_line in sacct_output.split('\n'):
+
+                job_split = job_line.split()
+                if len(job_split) == 0:
+                    continue
+
+                job_id = job_split[0]
+                job_name = job_split[1]
+                job_status = ' '.join(job_split[2:])
+                
+                if job_name in submitted_job_blocks:
+                    if job_status in ['PENDING', 'RUNNING', 'COMPLETED']:
+                        if job_name in pending_running_complete_job_blocks:
+                            print 'Found duplicate job: ' + job_name
+                            dup_job_id, dup_job_status = pending_running_complete_job_blocks[job_name]
+                            print job_id, job_status, dup_job_id, dup_job_status
+
+                            job_to_kill = None
+                            if job_status == 'PENDING':
+                                job_to_kill = job_id
+                            elif dup_job_status == 'PENDING':
+                                job_to_kill = dup_job_id
+                                pending_running_complete_job_blocks[job_name] = (job_id, job_status)    
+
+                            if job_to_kill is not None:
+                                print 'Canceling job ' + job_to_kill
+                                try:
+                                    scancel_output = subprocess.check_output(['scancel', '{0}'.format(job_to_kill)])
+                                    print scancel_output
+                                except:
+                                    print "Error canceling job:", sys.exc_info()[0]
+                        else:
+                            pending_running_complete_job_blocks[job_name] = (job_id, job_status)
+                            if job_status == 'PENDING':
+                                pending += 1
+                            elif job_status == 'RUNNING':
+                                running += 1
+                            elif job_status == 'COMPLETED':
+                                complete += 1
+                    elif job_status in ['FAILED', 'NODE_FAIL']:
+                        failed += 1
+                    elif job_status in ['CANCELLED', 'CANCELLED+'] or job_status.startswith('CANCELLED'):
+                        cancelled += 1
+
+                        # This job could requeued after preemption
+                        # Wait cancelled_requeue_iters before requeueing
+                        cancelled_iters = 0
+                        if job_id in cancelled_jobs:
+                            cancelled_iters = cancelled_jobs[job_id]
+
+                        if cancelled_iters < cancelled_requeue_iters:
+                            pending_running_complete_job_blocks[job_name] = (job_id, job_status)
+                            cancelled_jobs[job_id] = cancelled_iters + 1
+
+                    elif job_status in ['TIMEOUT']:
+                        timeout += 1
+                    else:
+                        print "Unexpected status: {0}".format(job_status)
+                        other_status += 1
+                elif job_name not in ['batch', 'true', 'prolog']:
+                    non_matching += 1
+
+            #print 'Found {0} running job blocks.'.format(len(pending_running_complete_job_blocks))
+
+            # Find running jobs
+            pending_running_complete_jobs = {}
+            for job_block_name in pending_running_complete_job_blocks:
+                job_id, job_status = pending_running_complete_job_blocks[job_block_name]
+                job_block_list = submitted_job_blocks[job_block_name]
+                for job_list in job_block_list:
+                    for job in job_list:
+                        pending_running_complete_jobs[job.name] = (job_id, job_status)
+
+            #print '== {0} running jobs.'.format(len(pending_running_complete_jobs))
+
+            # Make a list of runnable jobs
+            run_count = 0
+            block_count = 0
+            runnable_jobs = []
+            for j in cls.all_jobs:
+                if j.name not in pending_running_complete_jobs and not j.get_done() and j.dependendencies_done():
+                    runnable_jobs.append(j)
+                    run_count += 1
+
+            new_job_blocks = Job.multicore_run_list(runnable_jobs)
+            block_count += len(new_job_blocks)
+            submitted_job_blocks.update(new_job_blocks)
+
+            print 'Found {0} pending, {1} running, {2} complete, {3} failed, {4} cancelled, {5} timeout, {6} unknown status and {7} non-matching job blocks.'.format(
+                pending, running, complete, failed, cancelled, timeout, other_status, non_matching)
+
+            print "Queued {0} job{1} in {2} block{3}.".format(
+                run_count, '' if run_count == 1 else 's',
+                block_count, '' if block_count == 1 else 's')
+
+            if pending > 0 or running > 0 or run_count > 0:
+                time.sleep(60)
+            else:
+                all_jobs_complete = True
 
     @classmethod
     def keep_running(cls):
@@ -768,15 +910,16 @@ if __name__ == '__main__':
     nblocks_x = (image_size - 2 * block_xy_halo) / block_xy_size
     nblocks_y = (image_size - 2 * block_xy_halo) / block_xy_size
     nblocks_z = (len(segmentations) - 2 * block_z_halo) / block_z_size
+    block_order = []
     for block_idx_z in range(nblocks_z):
         lo_slice = block_idx_z * block_z_size
         hi_slice = lo_slice + block_z_size + 2 * block_z_halo
-        for block_idx_x in range(nblocks_x):
-            xlo = block_idx_x * block_xy_size
-            xhi = xlo + block_xy_size + 2 * block_xy_halo
-            for block_idx_y in range(nblocks_y):
-                ylo = block_idx_y * block_xy_size
-                yhi = ylo + block_xy_size + 2 * block_xy_halo
+        for block_idx_y in range(nblocks_y):
+            ylo = block_idx_y * block_xy_size
+            yhi = ylo + block_xy_size + 2 * block_xy_halo
+            for block_idx_x in range(nblocks_x):
+                xlo = block_idx_x * block_xy_size
+                xhi = xlo + block_xy_size + 2 * block_xy_halo
                 print "Making block {0}, slice {1}, crop {2}.".format(
                     (block_idx_x, block_idx_y, block_idx_z),
                     (lo_slice, hi_slice),
@@ -785,14 +928,15 @@ if __name__ == '__main__':
                     Block(segmentations[lo_slice:hi_slice],
                           (block_idx_x, block_idx_y, block_idx_z),
                           xlo, ylo, xhi, yhi)
+                block_order.append((block_idx_x, block_idx_y, block_idx_z))
 
     # Window fuse all blocks
     # Generate block id based on on block index with z as most significant (allows additional slabs to be added later)
-    fused_blocks = dict((idxs, FusedBlock(block, idxs,
-        idxs[0] + idxs[1] * nblocks_x + idxs[2] * nblocks_x * nblocks_y)) for (idxs, block) in blocks.iteritems())
+    fused_blocks = dict((idxs, FusedBlock(blocks[idxs], idxs,
+        idxs[0] + idxs[1] * nblocks_x + idxs[2] * nblocks_x * nblocks_y)) for idxs in block_order)
 
     # Cleanup all blocks (remove small or completely enclosed segments)
-    cleaned_blocks = dict((idxs, CleanBlock(fb)) for idxs, fb in fused_blocks.iteritems())
+    cleaned_blocks = dict((idxs, CleanBlock(fused_blocks[idxs])) for idxs in block_order)
     #cleaned_blocks = fused_blocks
 
     # Pairwise match all blocks.
@@ -802,7 +946,7 @@ if __name__ == '__main__':
     # sets (even-to-odd, then odd-to-even)
     for direction in range(3):  # X, Y, Z
         for wpidx, which_pairs in enumerate(['even', 'odd']):
-            for idx in cleaned_blocks:
+            for idx in block_order:
                 if (idx[direction] % 2) == wpidx:  # merge even-to-odd, then odd-to-even
                     neighbor_idx = list(idx)
                     neighbor_idx[direction] += 1  # check neighbor exists
@@ -821,8 +965,8 @@ if __name__ == '__main__':
     # the global remap.  Work first on XY planes, to add some parallelism and
     # limit number of command arguments.
     plane_joins_lists = {}
-    for idxs, block in cleaned_blocks.iteritems():
-        plane_joins_lists[idxs[2]] = plane_joins_lists.get(idxs[2], []) + [block]
+    for idxs in block_order:
+        plane_joins_lists[idxs[2]] = plane_joins_lists.get(idxs[2], []) + [cleaned_blocks[idxs]]
     plane_join_jobs = [JoinConcatenation('concatenate_Z_%d' % idx, plane_joins_lists[idx])
                        for idx in plane_joins_lists]
     full_join = JoinConcatenation('concatenate_full', plane_join_jobs)
@@ -831,7 +975,7 @@ if __name__ == '__main__':
     remap = GlobalRemap('globalmap', full_join)
 
     # and apply it to every block
-    remapped_blocks = [RemapBlock(fb, remap, idx) for idx, fb in cleaned_blocks.iteritems()]
+    remapped_blocks = [RemapBlock(cleaned_blocks[idx], remap, idx) for idx in block_order]
     remapped_blocks_by_plane = defaultdict(list)
     for bl in remapped_blocks:
         remapped_blocks_by_plane[bl.indices[2]] += [bl]
@@ -877,9 +1021,15 @@ if __name__ == '__main__':
     elif '-m' in sys.argv or '--multicore' in sys.argv:
         if RUN_LOCAL:
             print "ERROR: --local cannot be used with --multicore (not yet implemented)."
-            return
-        # Bundle jobs for multicore nodes
-        Job.multicore_run_all()
+        else:
+            # Bundle jobs for multicore nodes
+            Job.multicore_run_all()
+    elif '-mk' in sys.argv or '--multicore-keeprunning' in sys.argv:
+        if RUN_LOCAL:
+            print "ERROR: --local cannot be used with --multicore-keeprunning (not yet implemented)."
+        else:
+            # Bundle jobs for multicore nodes
+            Job.multicore_keep_running()
     else:
         for j in Job.all_jobs:
             if j.output == sys.argv[3] or sys.argv[3] in j.output or sys.argv[3] in j.output[0] or sys.argv[3] in j.name:
