@@ -8,7 +8,6 @@
 import h5py
 import numpy as np
 import sys
-sys.path.append(r'c:\Python27\Lib\site-packages')
 import pickle
 from OpenGL.GLUT import *
 from OpenGL.GLU import *

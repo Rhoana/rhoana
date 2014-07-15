@@ -7,7 +7,6 @@
 #--------------------
 
 import sys
-sys.path.append(r'c:\Python27\Lib\site-packages')
 import h5py
 import numpy as np
 import glob
@@ -25,7 +24,6 @@ import Polygon
 import scipy.ndimage as sp
 
 from pysqlite2 import dbapi2 as sqlite
-
 
 def contours_to_poly(contours, hierarchy):
     def is_hole(idx):
@@ -168,6 +166,8 @@ class Extractor:
         return tot_contours, tot_normals, tot_mask
         
     def get_tile_list(self, label, z_list):
+    	print self.segment_file, "SEGMENT FILE"
+	sys.stdout.flush()
         con = sqlite.connect(self.segment_file)
         cur = con.cursor()
         #w = 0 requirement specifies highest resolution

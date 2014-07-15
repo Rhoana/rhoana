@@ -7,7 +7,6 @@
 #------------------
 
 import sys
-sys.path.append(r'c:\Python27\Lib\site-packages')
 import h5py
 import numpy as np
 import glob

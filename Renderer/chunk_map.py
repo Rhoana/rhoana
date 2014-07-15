@@ -10,7 +10,6 @@ import numpy as np
 import time
 import math
 import sys
-sys.path.append(r'c:\Python27\Lib\site-packages')
 import pickle
 
 

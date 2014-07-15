@@ -10,7 +10,6 @@
 #-------------------------
 
 import sys
-sys.path.append(r'c:\Python27\Lib\site-packages')
 sys.path.append('.')
 import h5py
 import numpy as np
@@ -22,6 +21,7 @@ import math
 import re
 import time
 import threading
+
 from Queue import Queue
 from OpenGL.GLUT import *
 from OpenGL.GLU import *
@@ -33,7 +33,6 @@ except Exception:
 import arcball as arc
 
 from pysqlite2 import dbapi2 as sqlite
-
 import cv2
 import select
 
@@ -90,8 +89,9 @@ class Viewer:
         self.rows = rows
         self.columns = columns
         self.layers = layers
+	self.x2x = 1; self.y2x = float(columns)/rows; self.z2x = float(layers)/rows;
         self.pick_location = (self.pick_location[0]/pow(2, w) - 1, self.pick_location[1]/pow(2, w) - 1, self.pick_location[2])
-        
+
     def main(self):
         glutInit(sys.argv)
         glutInitDisplayMode(GLUT_RGBA | GLUT_DOUBLE | GLUT_DEPTH | GLUT_ALPHA)
@@ -162,7 +162,7 @@ class Viewer:
     def reset(self):
         self.reset_translation()
         self.reset_zoom()
-            
+
     def on_idle(self):
         timer = time.time()
         while(not self.in_q.empty() and time.time()-timer<.1):
@@ -225,7 +225,7 @@ class Viewer:
         for key in self.extractor_dict.keys():
             self.extractor_dict[key].stop()
         glutPostRedisplay()
-    
+
     def undo(self):
         label = self.display_list_dict.keys()[0]
         for display_list in self.display_list_dict[label]:
@@ -268,8 +268,10 @@ class Viewer:
         
         glMatrixMode(GL_MODELVIEW)
         glPushMatrix()
-        glTranslatef(-.9, .9, .9)
-        glScalef(1.8/self.columns, -1.8/self.rows, -1.8/self.layers)
+        #glTranslatef(-.9, .9, .9)
+        glTranslatef(-.9*self.x2x, .9*self.y2x, .9*self.z2x)
+        glScalef(1.8*self.x2x/self.columns, -1.8*self.y2x/self.rows, -1.8*self.z2x/self.layers)
+        #glScalef(1.8/self.columns, -1.8/self.rows, -1.8/self.layers)
         #draw the layers
 
         glEnableClientState(GL_VERTEX_ARRAY)
@@ -302,8 +304,9 @@ class Viewer:
         
         glMatrixMode(GL_MODELVIEW)
         glPushMatrix()
-        glTranslatef(-.9, .9, .9)
-        glScalef(1.8/self.columns, -1.8/self.rows, -1.8/self.layers)
+        glTranslatef(-.9*self.x2x, .9*self.y2x, .9*self.z2x)
+	glScalef(1.8*self.x2x/self.columns, -1.8*self.y2x/self.rows, -1.8*self.z2x/self.layers)
+        #glScalef(1.8/self.columns, -1.8/self.rows, -1.8/self.layers)
         
         #draw the layers
         glMaterialfv(GL_FRONT_AND_BACK, GL_AMBIENT_AND_DIFFUSE, color)
@@ -332,6 +335,7 @@ class Viewer:
 
     def make_box_list(self):
         '''makes a display list to draw the box'''
+	x = self.x2x*.9; y = self.y2x*.9; z = self.z2x*.9;
         glNewList(1, GL_COMPILE)
         
         glMatrixMode(GL_MODELVIEW)
@@ -340,6 +344,15 @@ class Viewer:
         #make a box around the image
         glBegin(GL_LINES)
         glColor3f(1.0, 0, 0) #x in red
+	glVertex3f(-x, -y, -z)
+	glVertex3f(x, -y, -z)
+	glVertex3f(-x, y, -z)
+	glVertex3f(x, y, -z)
+	glVertex3f(-x, -y, z)
+	glVertex3f(x, -y, z)
+	glVertex3f(-x, y, z)
+	glVertex3f(x, y, z)
+	'''
         glVertex3f(-.9, -.9, -.9)
         glVertex3f(.9, -.9, -.9)
         glVertex3f(-.9, .9, -.9)
@@ -348,7 +361,17 @@ class Viewer:
         glVertex3f(.9, -.9, .9)
         glVertex3f(-.9, .9, .9)
         glVertex3f(.9, .9, .9)
+	'''
         glColor3f(0,1.0, 0) #y in green
+        glVertex3f(-x, -y, -z)
+	glVertex3f(-x, y, -z)
+	glVertex3f(x, -y, -z)
+	glVertex3f(x, y, -z)
+	glVertex3f(-x, y, z)
+	glVertex3f(-x, -y, z)
+	glVertex3f(x, -y, z)
+	glVertex3f(x, y, z)
+        '''
         glVertex3f(-.9, -.9, -.9)
         glVertex3f(-.9, .9, -.9)
         glVertex3f(.9, -.9, -.9)
@@ -357,7 +380,17 @@ class Viewer:
         glVertex3f(-.9, -.9, .9)
         glVertex3f(.9, -.9, .9)
         glVertex3f(.9, .9, .9)
+	'''
         glColor3f(0,0,1.0) #z in blue
+        glVertex3f(-x, -y, -z)
+	glVertex3f(-x, -y, z)
+	glVertex3f(x, -y, -z)
+	glVertex3f(x, -y, z)
+	glVertex3f(-x, y, -z)
+	glVertex3f(-x, y, z)
+	glVertex3f(x, y, -z)
+	glVertex3f(x, y, z)
+	'''
         glVertex3f(-.9, -.9, -.9)
         glVertex3f(-.9, -.9, .9)
         glVertex3f(.9, -.9, -.9)
@@ -366,18 +399,19 @@ class Viewer:
         glVertex3f(-.9, .9, .9)
         glVertex3f(.9, .9, -.9)
         glVertex3f(.9, .9, .9)
+	'''
         glEnd()
 
         glDisable(GL_LIGHTING)
         glColor3f(0.5, 0.5, 0.5)
         
-        glRasterPos3f(-.9, .9, .9)
+        glRasterPos3f(-.9*self.x2x, .9*self.y2x, .9*self.z2x)
         glutBitmapString(GLUT_BITMAP_TIMES_ROMAN_24, "(0,0,0)")
-        glRasterPos3f(.9, .9, .9)
+        glRasterPos3f(.9*self.x2x, .9*self.y2x, .9*self.z2x)
         glutBitmapString(GLUT_BITMAP_TIMES_ROMAN_24, "x=" + str(self.columns-1))
-        glRasterPos3f(-.9, -.9, .9)
+        glRasterPos3f(-.9*self.x2x, -.9*self.y2x, .9*self.z2x)
         glutBitmapString(GLUT_BITMAP_TIMES_ROMAN_24, "y= " + str(self.rows-1))
-        glRasterPos3f(-.9, .9, -.9)
+        glRasterPos3f(-.9*self.x2x, .9*self.y2x, -.9*self.z2x)
         glutBitmapString(GLUT_BITMAP_TIMES_ROMAN_24, "z= " + str(self.layers-1))
         glEnable(GL_LIGHTING)
         glPopMatrix()
@@ -421,34 +455,34 @@ class Viewer:
         glMatrixMode(GL_MODELVIEW)
         glPushMatrix()
         location = self.pick_location
-        glTranslatef(1.8*location[0]/self.columns-.9,
-                    -(1.8*location[1]/self.rows-.9),
-                    -(1.8*location[2]/self.layers-.9))
+        glTranslatef(self.x2x*(1.8*location[0]/self.columns-.9),
+                    -self.y2x*(1.8*location[1]/self.rows-.9),
+                    -self.z2x*(1.8*location[2]/self.layers-.9))
         glColor3fv(self.marker_color)
         glMaterial
         glutSolidSphere(.01, 50, 50)
-        glTranslatef(-(1.8*location[0]/self.columns-.9), (1.8*location[1]/self.rows-.9),0)
+        glTranslatef(-self.x2x*(1.8*location[0]/self.columns-.9), self.y2x*(1.8*location[1]/self.rows-.9),0)
         
         #draw a square parellel to z plane at z level of marker
         glBegin(GL_LINES)
         glColor3f(1.0, 1.0, 1.0)
-        glVertex3f(-.9, -.9, 0)
-        glVertex3f(.9, -.9, 0)
-        glVertex3f(-.9, .9, 0)
-        glVertex3f(.9, .9, 0)
-        glVertex3f(-.9, -.9, 0)
-        glVertex3f(-.9, .9, 0)
-        glVertex3f(.9, -.9, 0)
-        glVertex3f(.9, .9, 0)
-        glVertex3f(-.9, .9, 0)
-        glVertex3f(-.9, -.9, 0)
-        glVertex3f(.9, -.9, 0)
-        glVertex3f(.9, .9, 0)
+        glVertex3f(-.9*self.x2x, -.9*self.y2x, 0)
+        glVertex3f(.9*self.x2x, -.9*self.y2x, 0)
+        glVertex3f(-.9*self.x2x, .9*self.y2x, 0)
+        glVertex3f(.9*self.x2x, .9*self.y2x, 0)
+        glVertex3f(-.9*self.x2x, -.9*self.y2x, 0)
+        glVertex3f(-.9*self.x2x, .9*self.y2x, 0)
+        glVertex3f(.9*self.x2x, -.9*self.y2x, 0)
+        glVertex3f(.9*self.x2x, .9*self.y2x, 0)
+        glVertex3f(-.9*self.x2x, .9*self.y2x, 0)
+        glVertex3f(-.9*self.x2x, -.9*self.y2x, 0)
+        glVertex3f(.9*self.x2x, -.9*self.y2x, 0)
+        glVertex3f(.9*self.x2x, .9*self.y2x, 0)
         glEnd()
         
         glColor3f(1.0, 0, 0)
         
-        glRasterPos(.9, .9, 0)
+        glRasterPos(.9*self.x2x, .9*self.y2x, 0)
         glutBitmapString(GLUT_BITMAP_TIMES_ROMAN_24, "z= " + str(location[2]))
         
         glPopMatrix()
@@ -471,7 +505,6 @@ class Viewer:
             self.reset()
         if (key == chr(122)): #z to reset the zoom
             self.reset_zoom()
-            
         return
         
     def on_scroll(self, wheel, direction, x, y):
@@ -527,6 +560,7 @@ class Viewer:
           
 
 if __name__ == '__main__':
+    print OpenGL.GL.__file__, OpenGL.GLU.__file__, OpenGL.GLUT.__file__
     display_queue = Queue()
     sys.argv.pop(0)
     
