@@ -51,39 +51,39 @@ class Viewer:
         self.win_h = 1000
         self.win_w = 1000
         self.arcball = self.create_arcball()
-        
+
         self.directory = directory
         self.in_q =in_q
         self.max_x = max_x #highest resolution
         self.max_y = max_y #highest resolution
-        
+
         self.rows = 0
         self.columns = 0
         self.layers = 0
-        
+
         self.fov = 60
         self.aspect = float(self.win_w)/self.win_h
-        
+
         self.left = None #keep track of left button status
         self.pick_location = location
-        
+
         self.display_list_idx = 2 #count from 1 and use first index for box
         self.display_list_dict = dict() #COLOR as key, display_list indices as value
         self.marker_color = [1., 1., 1.] #initial marker is white
-        
+
         self.first = True #used to control display list flow
         self.icon_color = np.array((0.0, 1.0, 0.0))
         self.st = time.time()
-        
+
         self.center_x = 0
         self.center_y = 0
-        
+
         self.extractor_dict = dict() #keys are indices, values are extractor threads
         self.make_lists = True
-        
+
         self.num_labels = 0
         self.label_dict = dict() #keys are float indices, values are labels
-        
+
     def set_dimensions(self, rows, columns, layers, w):
         '''sets the dimensions of the viewing box'''
         self.rows = rows
@@ -94,15 +94,15 @@ class Viewer:
 
     def main(self):
         glutInit(sys.argv)
-        glutInitDisplayMode(GLUT_RGBA | GLUT_DOUBLE | GLUT_DEPTH | GLUT_ALPHA)
+        glutInitDisplayMode(GLUT_RGBA | GLUT_DOUBLE | GLUT_DEPTH | GLUT_ALPHA | GLUT_MULTISAMPLE)
         glutInitWindowSize(self.win_w, self.win_h) #width, height
         glutCreateWindow("3D View")
-        
+
         glMatrixMode(GL_PROJECTION)
         glLoadIdentity()
         gluPerspective(self.fov, self.aspect, 1, 10)
         glMatrixMode(GL_MODELVIEW)
-        
+
         glShadeModel(GL_SMOOTH)
         glEnable(GL_DEPTH_TEST)
         glEnable(GL_LIGHTING)
@@ -110,9 +110,15 @@ class Viewer:
         glEnable(GL_NORMALIZE)
         glColorMaterial(GL_FRONT_AND_BACK, GL_EMISSION)
         glEnable(GL_COLOR_MATERIAL)
-        
+
+        glHint( GL_LINE_SMOOTH_HINT, GL_NICEST );
+        glHint( GL_POLYGON_SMOOTH_HINT, GL_NICEST );
+        glEnable( GL_LINE_SMOOTH );
+        glEnable( GL_MULTISAMPLE );
+
+
         glLightfv(GL_LIGHT0, GL_SPECULAR, (0,0,0))
-        
+
         glutDisplayFunc(self.draw)
         glutKeyboardFunc(self.keyboard)
         glutMouseFunc(self.on_click)
@@ -120,22 +126,22 @@ class Viewer:
         glutMouseWheelFunc(self.on_scroll)
         glutIdleFunc(self.on_idle)
         glutReshapeFunc(self.on_resize)
-        
+
         glutMainLoop()
-        return          
-        
+        return
+
     def on_resize(self, w, h):
         '''resize the viewing window'''
         self.win_h = h
         self.win_w = w
         glViewport(0,0, w,h)
         self.arcball.place([self.win_w/2, self.win_h/2], self.win_w/2)
-    
+
     def translate(self, x, y):
         '''translate the viewing box based on mouse location'''
         self.center_x = self.center_x+((float(x)/self.win_w)-.5)*2
         self.center_y = self.center_y-((float(y)/self.win_h)-.5)*2
-    
+
     def shift(self, key):
         '''translate the viewing box based on keyboard input'''
         #may want to tune the translation levels better
@@ -147,18 +153,18 @@ class Viewer:
             self.center_y += float(self.fov)**2/10000
         elif key == chr(108):
             self.center_x -=float(self.fov)**2/10000
-            
+
     def reset_translation(self):
         '''reset the viewing box to 0 translation'''
         self.center_x = 0
         self.center_y = 0
         glutPostRedisplay()
-        
+
     def reset_zoom(self):
         '''reset the zoom level'''
         self.fov = 60
         glutPostRedisplay()
-    
+
     def reset(self):
         self.reset_translation()
         self.reset_zoom()
@@ -182,13 +188,9 @@ class Viewer:
                 extracting_worker.daemon = True
                 extracting_worker.start()
             elif temp[0] == "contours":
-                contours =  temp[1]
-                color = temp[2]
-                primary_label = temp[3]
-                normals = temp[4]
-                label_idx = temp[5]
+                _, contours, color, primary_label, label_idx, z = temp
                 if self.make_lists:
-                    self.make_display_lists(contours, color/255.0, primary_label, normals, label_idx)
+                    self.make_display_lists(contours, color/255.0, primary_label, label_idx, z)
             elif temp[0] == "limits":
                 self.max_x= temp[1]
                 self.max_y = temp[2]
@@ -205,7 +207,7 @@ class Viewer:
             self.make_lists = True
             glutPostRedisplay()
 
-                
+
     def loading_icon(self):
         glBegin(GL_QUADS)
         glVertex3f(-1.0, -1.0, 1.0)
@@ -213,7 +215,7 @@ class Viewer:
         glVertex3f(-.95, -.95, 1.0)
         glVertex3f(-1.0, -.95, 1.0)
         glEnd()
-    
+
     def refresh(self):
         '''Clears all contours and deletes working extractors'''
         #first display list is for the box
@@ -231,41 +233,41 @@ class Viewer:
         for display_list in self.display_list_dict[label]:
             glDeleteLists(display_list, 1) #delete back and front lists
             glutPostRedisplay()
-            
+
     def remove_label(self, ids):
         '''remove a single contour'''
         for display_list in self.display_list_dict[ids[0]]:
             glDeleteLists(display_list, 1)
             self.extractor_dict[ids[0]].stop()
             glutPostRedisplay()
-        
+
     def create_arcball(self):
         arcball = arc.Arcball()
         #locate the arcball center at center of window with radius half the width
         arcball.place([self.win_w/2, self.win_h/2], self.win_w/2)
         return arcball
-        
-    def make_display_lists(self, contours, color, label, normals, label_idx):
+
+    def make_display_lists(self, contours, color, label, label_idx, z):
         '''Generates display lists to draw both the front and back buffered images'''
-        if self.first: #make the box 
+        if self.first: #make the box
             display_list = glGenLists(1)
             self.axes()
             self.make_box_list()
             self.first = False
         self.display_lists = glGenLists(2) #first list for front, second for back
         if label in self.display_list_dict:
-            self.display_list_dict[label] = self.display_list_dict[label] + [self.display_list_idx, self.display_list_idx+1] 
+            self.display_list_dict[label] = self.display_list_dict[label] + [self.display_list_idx, self.display_list_idx+1]
         else:
             self.display_list_dict[label] = [self.display_list_idx, self.display_list_idx+1]
-        self.make_front_list(contours, color, normals)
-        self.make_back_list(contours, label_idx)
+        self.make_front_list(contours, color, z)
+        self.make_back_list(contours, label_idx, z)
         self.display_list_idx +=2
-        
-    def make_back_list(self, contours, label_idx):
+
+    def make_back_list(self, contours, label_idx, z):
         '''Creates a display list to encode color for image. Not seen by user'''
         glNewList(self.display_list_idx+1, GL_COMPILE)
         glDisable(GL_LIGHTING) #don't use lighting for color encoding
-        
+
         glMatrixMode(GL_MODELVIEW)
         glPushMatrix()
         #glTranslatef(-.9, .9, .9)
@@ -274,19 +276,24 @@ class Viewer:
         #glScalef(1.8/self.columns, -1.8/self.rows, -1.8/self.layers)
         #draw the layers
 
+        glTranslatef(0, 0, z) # shift by Z offset
+
+        glLineWidth(3.0)
         glEnableClientState(GL_VERTEX_ARRAY)
         glEnableClientState(GL_COLOR_ARRAY)
         for cnt in contours:
             colors = np.zeros((cnt.shape[0], 4), np.float)
-            colors[:, :3] = cnt
+            colors[:, :2] = cnt
+            colors[:, 2] = z
             colors[:, 0] /= self.columns - 1
             colors[:, 1] /= - (self.rows - 1)
             colors[:, 2] /= - (self.layers - 1)
             colors[:, 1:3] += 1
             colors[:, 3] = label_idx/255.0
-            glVertexPointer(3, GL_INT, 0, cnt)
+
+            glVertexPointer(2, GL_INT, 0, cnt)
             glColorPointer(4, GL_FLOAT, 0, colors)
-            glDrawArrays(GL_TRIANGLE_STRIP, 0, cnt.shape[0])
+            glDrawArrays(GL_LINE_LOOP, 0, cnt.shape[0])
         glDisableClientState(GL_VERTEX_ARRAY)
         glDisableClientState(GL_COLOR_ARRAY)
 
@@ -296,40 +303,40 @@ class Viewer:
 
         glEndList()
 
-    def make_front_list(self, contours, color, normals):
+    def make_front_list(self, contours, color, z):
         '''Creates a display list to draw a box and the data scaled to .9*the size of the window.
         This list deals with the display seen by the user'''
-        
+
         glNewList(self.display_list_idx, GL_COMPILE)
-        
+
         glMatrixMode(GL_MODELVIEW)
         glPushMatrix()
         glTranslatef(-.9*self.x2x, .9*self.y2x, .9*self.z2x)
+
 	glScalef(1.8*self.x2x/self.columns, -1.8*self.y2x/self.rows, -1.8*self.z2x/self.layers)
         #glScalef(1.8/self.columns, -1.8/self.rows, -1.8/self.layers)
-        
+
         #draw the layers
+
+        glTranslatef(0, 0, z) # shift by Z offset
         glMaterialfv(GL_FRONT_AND_BACK, GL_AMBIENT_AND_DIFFUSE, color)
         glEnableClientState(GL_VERTEX_ARRAY)
         glEnableClientState(GL_NORMAL_ARRAY)
-        glEnableClientState(GL_COLOR_ARRAY)
-        for cnt, normal in zip(contours, normals):
-            colors = np.zeros_like(normal)
-            colors[...] = np.array(color)
-            colors[cnt[:, 0] == self.columns, :] = np.array([1, 0, 0])
-            colors[cnt[:, 0] == 0, :] = np.array([1, 0, 0])
-            colors[cnt[:, 1] == self.rows, :] = np.array([0, 1, 0])
-            colors[cnt[:, 1] == 0, :] = np.array([0, 1, 0])
-            colors[cnt[:, 2] == self.layers - 1, :] = np.array([0, 1, 1])
-            colors[cnt[:, 2] == 0, :] = np.array([0, 1, 1])
-            glVertexPointer(3, GL_INT, 0, cnt)
-            glNormalPointer(GL_FLOAT, 0, normal)
-            glColorPointer(3, GL_FLOAT, 0, colors)
-            glDrawArrays(GL_TRIANGLE_STRIP, 0, cnt.shape[0])
+        glLineWidth(3.0)
+        for cnt in contours:
+            normals = np.zeros((cnt.shape[0], 3), dtype=np.float)
+            normals[:, 0] = - (np.roll(cnt[:, 1], -1) - cnt[:, 1])
+            normals[:, 1] = (np.roll(cnt[:, 0], -1) - cnt[:, 0])
+            normals = normals + np.roll(normals, 1, axis=0)
+            normals = 0.5 * normals + 0.25 * (np.roll(normals, 1, axis=0) + np.roll(normals, -1, axis=0))
+            normals = 0.5 * normals + 0.25 * (np.roll(normals, 1, axis=0) + np.roll(normals, -1, axis=0))
+
+            glVertexPointer(2, GL_INT, 0, cnt)
+            glNormalPointer(GL_FLOAT, 0, normals)
+            glDrawArrays(GL_LINE_LOOP, 0, cnt.shape[0])
+
         glDisableClientState(GL_VERTEX_ARRAY)
         glDisableClientState(GL_NORMAL_ARRAY)
-        glDisableClientState(GL_COLOR_ARRAY)
-
         glPopMatrix()
         glEndList()
 
@@ -337,10 +344,10 @@ class Viewer:
         '''makes a display list to draw the box'''
 	x = self.x2x*.9; y = self.y2x*.9; z = self.z2x*.9;
         glNewList(1, GL_COMPILE)
-        
+
         glMatrixMode(GL_MODELVIEW)
         glPushMatrix()
-        
+
         #make a box around the image
         glBegin(GL_LINES)
         glColor3f(1.0, 0, 0) #x in red
@@ -404,7 +411,7 @@ class Viewer:
 
         glDisable(GL_LIGHTING)
         glColor3f(0.5, 0.5, 0.5)
-        
+
         glRasterPos3f(-.9*self.x2x, .9*self.y2x, .9*self.z2x)
         glutBitmapString(GLUT_BITMAP_TIMES_ROMAN_24, "(0,0,0)")
         glRasterPos3f(.9*self.x2x, .9*self.y2x, .9*self.z2x)
@@ -416,7 +423,7 @@ class Viewer:
         glEnable(GL_LIGHTING)
         glPopMatrix()
         glEndList()
-        
+
     def draw(self, pick=False):
         '''draws an image'''
         glMatrixMode(GL_PROJECTION)
@@ -427,14 +434,14 @@ class Viewer:
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)
         glLoadIdentity()
         gluLookAt(self.center_x,self.center_y, 3, self.center_x, self.center_y, 2, 0,1,0)
-        
+
         #Draw icon after rotating
         glColor3fv(self.icon_color)
         self.loading_icon()
         glColor3f(0.0, 0.0, 0.0)
         glMultMatrixd(self.arcball.matrix().T)
         glCallList(1)#draw the box and loading icon
-        
+
         if not pick:
             #even numbers for display
             for idx in range(2, self.display_list_idx+1, 2):
@@ -445,10 +452,10 @@ class Viewer:
             #odd numbers for picking
             for idx in range(3, self.display_list_idx+1, 2):
                 glCallList(idx)
-            glFlush()   
-      
+            glFlush()
+
         return
-        
+
     def draw_marker(self):
         '''Draws a sphere around the chosen point. Color is inverse of chosen pixel'''
         glMaterialfv(GL_FRONT_AND_BACK, GL_AMBIENT_AND_DIFFUSE, (0.0, 0.0, 0.0))
@@ -462,7 +469,7 @@ class Viewer:
         glMaterial
         glutSolidSphere(.01, 50, 50)
         glTranslatef(-self.x2x*(1.8*location[0]/self.columns-.9), self.y2x*(1.8*location[1]/self.rows-.9),0)
-        
+
         #draw a square parellel to z plane at z level of marker
         glBegin(GL_LINES)
         glColor3f(1.0, 1.0, 1.0)
@@ -479,14 +486,14 @@ class Viewer:
         glVertex3f(.9*self.x2x, -.9*self.y2x, 0)
         glVertex3f(.9*self.x2x, .9*self.y2x, 0)
         glEnd()
-        
+
         glColor3f(1.0, 0, 0)
-        
+
         glRasterPos(.9*self.x2x, .9*self.y2x, 0)
         glutBitmapString(GLUT_BITMAP_TIMES_ROMAN_24, "z= " + str(location[2]))
-        
+
         glPopMatrix()
-        
+
     def keyboard(self, key, x, y):
         key = key.lower()
         if key == chr(27): #escape to quit
@@ -506,7 +513,7 @@ class Viewer:
         if (key == chr(122)): #z to reset the zoom
             self.reset_zoom()
         return
-        
+
     def on_scroll(self, wheel, direction, x, y):
         '''zooms in and out on mouse scroll wheel'''
         self.fov -= 1 if direction == 1 else -1
@@ -525,7 +532,7 @@ class Viewer:
             print "location", self.pick_location[0], self.pick_location[1], self.pick_location[2], self.label #send the label location to mojo
             sys.stdout.flush()
             self.has_marker = True
-    
+
     def pick(self, x,y):
         '''gets the (x,y,z) location in the full volume of a chosen pixel'''
         click_color = None
@@ -535,20 +542,20 @@ class Viewer:
         label_idx = int(temp[3]*255.0 + .5)
         label = self.label_dict[label_idx]
         if not np.all(click_color==0):
-            location  = [int(click_color[0]*(self.columns-1)), 
+            location  = [int(click_color[0]*(self.columns-1)),
                         int(-(click_color[1]-1)*(self.rows-1)), int(-(click_color[2]-1)*((self.layers-1)))]
             glReadBuffer(GL_FRONT)
             marker_color_neg = glReadPixels(x,self.win_h-y, 1,1, GL_RGB, GL_FLOAT)[0][0]
             marker_color = 1-marker_color_neg
             return location, marker_color, label
         return self.pick_location, self.marker_color, self.label
-        
+
     def on_drag(self, x, y):
         '''rotates image on dragging with left mouse down'''
         if self.left:
             self.arcball.drag((x,y))
             glutPostRedisplay()
-        
+
     def axes(self):
         '''generates vertices for a box'''
         self.x_axis = [[[0,0,0], [self.columns, 0,0]], [[0,self.rows,0], [self.columns, self.rows, 0]],
@@ -557,20 +564,20 @@ class Viewer:
                         [[self.columns, 0, self.layers],[self.columns, self.rows, self.layers]]]
         self.z_axis = [[[0,0,0], [0,0,self.layers]], [[self.columns,0,0],[self.columns, 0, self.layers]],
                         [[0, self.rows,0], [0, self.rows, self.layers]],[[self.columns, self.rows, 0],[self.columns, self.rows, self.layers]]]
-          
+
 
 if __name__ == '__main__':
     print OpenGL.GL.__file__, OpenGL.GLU.__file__, OpenGL.GLUT.__file__
     display_queue = Queue()
     sys.argv.pop(0)
-    
+
     #extract command line arguments
     directory = sys.argv[0]
-    
+
     location = (int(sys.argv[1]), int(sys.argv[2]), int(sys.argv[3])) #x,y,z
     max_x =int(sys.argv[4])
     max_y = int(sys.argv[5])
-    
+
     ids = []
     for label_set in (sys.argv[6:len(sys.argv)]):
         primary_id = []
@@ -580,22 +587,22 @@ if __name__ == '__main__':
         if split_str[1] != "":
             secondary_ids = [int(label) for label in re.split(',', split_str[1])]
         ids += [primary_id + secondary_ids]
-        
+
     extr = extractor.Extractor(display_queue, directory, ids, location, max_x, max_y, 0)
     viewer  = Viewer(location, display_queue, directory, max_x, max_y)
     viewer.extractor_dict[ids[0][0]] = extr
     handler = handler.Input_Handler(display_queue)
-    
+
     viewer.set_dimensions(extr.rows, extr.columns, extr.layers, extr.w)
-    
+
     viewer.label_dict[0] = ids[0][0]
-    
+
     extracting_worker = threading.Thread(target = extr.run, name = "extr")
     input_worker = threading.Thread(target = handler.run, name = "input_worker")
-    
+
     input_worker.daemon =True
     extracting_worker.daemon = True
     extracting_worker.start()
     input_worker.start()
-    
+
     viewer.main()
