@@ -116,10 +116,6 @@ class Extractor:
         def get_contours(buffer):
             contours, hierarchy  = cv2.findContours(buffer, cv2.RETR_CCOMP, cv2.CHAIN_APPROX_NONE)
             return contours
-            p = contours_to_poly(contours, hierarchy)
-            tristrips = [np.hstack((np.array(s), np.zeros((len(s), 1)))).astype(int) for s in p.triStrip()]
-            normals = [np.ones_like(s) for s in tristrips]
-            return tristrips, normals
 
         def get_polys():
             tile_list = set(tiles())
