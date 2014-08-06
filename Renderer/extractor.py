@@ -67,7 +67,6 @@ class Extractor:
 
         self.z_order = self.make_z_order(location[2])
         self.start_z = location[2]
-
         color_file = h5py.File(os.path.join(self.directory, "ids", "colorMap.hdf5"), 'r')
         self.color_map = color_file["idColorMap"][...]
         color_file.close()
@@ -106,21 +105,18 @@ class Extractor:
                     self.out_q.put(["contours", new_contours, color, label_set[0], self.idx, z])
 
     def find_contours(self, label_ids, z_list):
-        def tiles():
-            for label in label_ids:
-                for t in self.get_tile_list(label, z_list):
-                    yield t
         def get_mask(buffer, labels):
-            for label in label_ids:
-                buffer[1:-1, 1:-1] |= (labels == label)
+            S = np.sort(list(label_ids) + [np.inf])
+            buffer[1:-1, 1:-1] |= (S[S.searchsorted(labels)] == labels)
+
         def get_contours(buffer):
             contours, hierarchy  = cv2.findContours(buffer, cv2.RETR_CCOMP, cv2.CHAIN_APPROX_NONE)
             return contours
 
         def get_polys():
-            tile_list = set(tiles())
+            tiles = self.get_tile_list(label_ids[0], z_list)
 
-            for w, x, y, z in set(tiles()):
+            for w, x, y, z in tiles:
                 for tile_name in glob.glob(os.path.join(self.z_folders[z], "*")):
                     if os.path.basename(tile_name) == "y={0:08},x={1:08}.hdf5".format(y, x):
                         t_file = h5py.File(tile_name, "r")
@@ -147,4 +143,4 @@ class Extractor:
             cur.execute('select w,x,y,z from idTileIndex WHERE w = %d AND id = %d AND z = %d' % (self.w, label, z))
             tile_list += cur.fetchall()
         con.close()
-        return tile_list
+        return tile_list  
