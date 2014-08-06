@@ -569,14 +569,19 @@ class Viewer:
 if __name__ == '__main__':
     print OpenGL.GL.__file__, OpenGL.GLU.__file__, OpenGL.GLUT.__file__
     display_queue = Queue()
-    sys.argv.pop(0)
 
-    #extract command line arguments
-    directory = sys.argv[0]
+    progname = sys.argv.pop(0)
 
-    location = (int(sys.argv[1]), int(sys.argv[2]), int(sys.argv[3])) #x,y,z
-    max_x =int(sys.argv[4])
-    max_y = int(sys.argv[5])
+    try:
+        #extract command line arguments
+        directory = sys.argv[0]
+
+        location = (int(sys.argv[1]), int(sys.argv[2]), int(sys.argv[3])) #x,y,z
+        max_x =int(sys.argv[4])
+        max_y = int(sys.argv[5])
+    except:
+        print "Usage: {} mojo_directory X Y Z max_X max_Y".format(progname)
+        sys.exit(1)
 
     ids = []
     for label_set in (sys.argv[6:len(sys.argv)]):
