@@ -89,7 +89,9 @@ class Viewer:
         self.rows = rows
         self.columns = columns
         self.layers = layers
-	self.x2x = 1; self.y2x = float(columns)/rows; self.z2x = float(layers)/rows;
+        self.xyscale = 1.0 / max(rows, columns)
+        self.zscale = 1.0 / float(layers)
+
         self.pick_location = (self.pick_location[0]/pow(2, w) - 1, self.pick_location[1]/pow(2, w) - 1, self.pick_location[2])
 
     def main(self):
@@ -270,10 +272,8 @@ class Viewer:
 
         glMatrixMode(GL_MODELVIEW)
         glPushMatrix()
-        #glTranslatef(-.9, .9, .9)
-        glTranslatef(-.9*self.x2x, .9*self.y2x, .9*self.z2x)
-        glScalef(1.8*self.x2x/self.columns, -1.8*self.y2x/self.rows, -1.8*self.z2x/self.layers)
-        #glScalef(1.8/self.columns, -1.8/self.rows, -1.8/self.layers)
+        glTranslatef(-.9, .9, .9)
+        glScalef(1.8 * self.xyscale, -1.8 * self.xyscale, -1.8 * self.zscale)
         #draw the layers
 
         glTranslatef(0, 0, z) # shift by Z offset
@@ -285,10 +285,9 @@ class Viewer:
             colors = np.zeros((cnt.shape[0], 4), np.float)
             colors[:, :2] = cnt
             colors[:, 2] = z
-            colors[:, 0] /= self.columns - 1
-            colors[:, 1] /= - (self.rows - 1)
-            colors[:, 2] /= - (self.layers - 1)
-            colors[:, 1:3] += 1
+            colors[:, 0] /= self.rows - 1
+            colors[:, 1] /= self.columns - 1
+            colors[:, 2] /= self.layers - 1
             colors[:, 3] = label_idx/255.0
 
             glVertexPointer(2, GL_INT, 0, cnt)
@@ -311,13 +310,10 @@ class Viewer:
 
         glMatrixMode(GL_MODELVIEW)
         glPushMatrix()
-        glTranslatef(-.9*self.x2x, .9*self.y2x, .9*self.z2x)
-
-	glScalef(1.8*self.x2x/self.columns, -1.8*self.y2x/self.rows, -1.8*self.z2x/self.layers)
-        #glScalef(1.8/self.columns, -1.8/self.rows, -1.8/self.layers)
+        glTranslatef(-.9, .9, .9)
+        glScalef(1.8 * self.xyscale, -1.8 * self.xyscale, -1.8 * self.zscale)
 
         #draw the layers
-
         glTranslatef(0, 0, z) # shift by Z offset
         glMaterialfv(GL_FRONT_AND_BACK, GL_AMBIENT_AND_DIFFUSE, color)
         glEnableClientState(GL_VERTEX_ARRAY)
@@ -342,83 +338,50 @@ class Viewer:
 
     def make_box_list(self):
         '''makes a display list to draw the box'''
-	x = self.x2x*.9; y = self.y2x*.9; z = self.z2x*.9;
+        x = self.rows
+        y = self.columns
+        z = self.layers
+
         glNewList(1, GL_COMPILE)
 
         glMatrixMode(GL_MODELVIEW)
         glPushMatrix()
-
-        #make a box around the image
-        glBegin(GL_LINES)
-        glColor3f(1.0, 0, 0) #x in red
-	glVertex3f(-x, -y, -z)
-	glVertex3f(x, -y, -z)
-	glVertex3f(-x, y, -z)
-	glVertex3f(x, y, -z)
-	glVertex3f(-x, -y, z)
-	glVertex3f(x, -y, z)
-	glVertex3f(-x, y, z)
-	glVertex3f(x, y, z)
-	'''
-        glVertex3f(-.9, -.9, -.9)
-        glVertex3f(.9, -.9, -.9)
-        glVertex3f(-.9, .9, -.9)
-        glVertex3f(.9, .9, -.9)
-        glVertex3f(-.9, -.9, .9)
-        glVertex3f(.9, -.9, .9)
-        glVertex3f(-.9, .9, .9)
-        glVertex3f(.9, .9, .9)
-	'''
-        glColor3f(0,1.0, 0) #y in green
-        glVertex3f(-x, -y, -z)
-	glVertex3f(-x, y, -z)
-	glVertex3f(x, -y, -z)
-	glVertex3f(x, y, -z)
-	glVertex3f(-x, y, z)
-	glVertex3f(-x, -y, z)
-	glVertex3f(x, -y, z)
-	glVertex3f(x, y, z)
-        '''
-        glVertex3f(-.9, -.9, -.9)
-        glVertex3f(-.9, .9, -.9)
-        glVertex3f(.9, -.9, -.9)
-        glVertex3f(.9, .9, -.9)
-        glVertex3f(-.9, .9, .9)
-        glVertex3f(-.9, -.9, .9)
-        glVertex3f(.9, -.9, .9)
-        glVertex3f(.9, .9, .9)
-	'''
-        glColor3f(0,0,1.0) #z in blue
-        glVertex3f(-x, -y, -z)
-	glVertex3f(-x, -y, z)
-	glVertex3f(x, -y, -z)
-	glVertex3f(x, -y, z)
-	glVertex3f(-x, y, -z)
-	glVertex3f(-x, y, z)
-	glVertex3f(x, y, -z)
-	glVertex3f(x, y, z)
-	'''
-        glVertex3f(-.9, -.9, -.9)
-        glVertex3f(-.9, -.9, .9)
-        glVertex3f(.9, -.9, -.9)
-        glVertex3f(.9, -.9, .9)
-        glVertex3f(-.9, .9, -.9)
-        glVertex3f(-.9, .9, .9)
-        glVertex3f(.9, .9, -.9)
-        glVertex3f(.9, .9, .9)
-	'''
-        glEnd()
+        glTranslatef(-.9, .9, .9)
+        glScalef(1.8 * self.xyscale, -1.8 * self.xyscale, -1.8 * self.zscale)
 
         glDisable(GL_LIGHTING)
+
+
+        glBegin(GL_LINES)
+        #make a box around the image
+        glColor3f(1.0, 0, 0) #x in red
+        for yoff in [0, y]:
+            for zoff in [0, z]:
+                glVertex3f(0, yoff, zoff)
+                glVertex3f(x, yoff, zoff)
+
+        glColor3f(0,1.0, 0) #y in green
+        for xoff in [0, x]:
+            for zoff in [0, z]:
+                glVertex3f(xoff, 0, zoff)
+                glVertex3f(xoff, y, zoff)
+
+        glColor3f(0,0,1.0) #z in blue
+        for xoff in [0, x]:
+            for yoff in [0, y]:
+                glVertex3f(xoff, yoff, 0)
+                glVertex3f(xoff, yoff, z)
+        glEnd()
+
         glColor3f(0.5, 0.5, 0.5)
 
-        glRasterPos3f(-.9*self.x2x, .9*self.y2x, .9*self.z2x)
+        glRasterPos3f(0, 0, 0)
         glutBitmapString(GLUT_BITMAP_TIMES_ROMAN_24, "(0,0,0)")
-        glRasterPos3f(.9*self.x2x, .9*self.y2x, .9*self.z2x)
-        glutBitmapString(GLUT_BITMAP_TIMES_ROMAN_24, "x=" + str(self.columns-1))
-        glRasterPos3f(-.9*self.x2x, -.9*self.y2x, .9*self.z2x)
-        glutBitmapString(GLUT_BITMAP_TIMES_ROMAN_24, "y= " + str(self.rows-1))
-        glRasterPos3f(-.9*self.x2x, .9*self.y2x, -.9*self.z2x)
+        glRasterPos3f(x, 0, 0)
+        glutBitmapString(GLUT_BITMAP_TIMES_ROMAN_24, "x=" + str(self.rows-1))
+        glRasterPos3f(0, y, 0)
+        glutBitmapString(GLUT_BITMAP_TIMES_ROMAN_24, "y= " + str(self.columns-1))
+        glRasterPos3f(0, 0, z)
         glutBitmapString(GLUT_BITMAP_TIMES_ROMAN_24, "z= " + str(self.layers-1))
         glEnable(GL_LIGHTING)
         glPopMatrix()
@@ -458,39 +421,35 @@ class Viewer:
 
     def draw_marker(self):
         '''Draws a sphere around the chosen point. Color is inverse of chosen pixel'''
-        glMaterialfv(GL_FRONT_AND_BACK, GL_AMBIENT_AND_DIFFUSE, (0.0, 0.0, 0.0))
         glMatrixMode(GL_MODELVIEW)
         glPushMatrix()
+        glTranslatef(-.9, .9, .9)
+        glScalef(1.8 * self.xyscale, -1.8 * self.xyscale, -1.8 * self.zscale)
+
         location = self.pick_location
-        glTranslatef(self.x2x*(1.8*location[0]/self.columns-.9),
-                    -self.y2x*(1.8*location[1]/self.rows-.9),
-                    -self.z2x*(1.8*location[2]/self.layers-.9))
+        glPushMatrix()
+        glTranslatef(location[0],
+                     location[1],
+                     location[2])
         glColor3fv(self.marker_color)
-        glMaterial
-        glutSolidSphere(.01, 50, 50)
-        glTranslatef(-self.x2x*(1.8*location[0]/self.columns-.9), self.y2x*(1.8*location[1]/self.rows-.9),0)
+        glEnable(GL_LIGHTING)
+        glutSolidSphere(3, 8, 8)
+        glPopMatrix()
 
         #draw a square parellel to z plane at z level of marker
-        glBegin(GL_LINES)
+        glBegin(GL_LINE_LOOP)
         glColor3f(1.0, 1.0, 1.0)
-        glVertex3f(-.9*self.x2x, -.9*self.y2x, 0)
-        glVertex3f(.9*self.x2x, -.9*self.y2x, 0)
-        glVertex3f(-.9*self.x2x, .9*self.y2x, 0)
-        glVertex3f(.9*self.x2x, .9*self.y2x, 0)
-        glVertex3f(-.9*self.x2x, -.9*self.y2x, 0)
-        glVertex3f(-.9*self.x2x, .9*self.y2x, 0)
-        glVertex3f(.9*self.x2x, -.9*self.y2x, 0)
-        glVertex3f(.9*self.x2x, .9*self.y2x, 0)
-        glVertex3f(-.9*self.x2x, .9*self.y2x, 0)
-        glVertex3f(-.9*self.x2x, -.9*self.y2x, 0)
-        glVertex3f(.9*self.x2x, -.9*self.y2x, 0)
-        glVertex3f(.9*self.x2x, .9*self.y2x, 0)
+        glVertex3f(0, 0, location[2])
+        glVertex3f(self.rows, 0, location[2])
+        glVertex3f(self.rows, self.columns, location[2])
+        glVertex3f(0, self.columns, location[2])
         glEnd()
 
-        glColor3f(1.0, 0, 0)
-
-        glRasterPos(.9*self.x2x, .9*self.y2x, 0)
+        glColor3f(1.0, 1.0, 0)
+        glRasterPos(0, 0, location[2])
+        glDisable(GL_LIGHTING)
         glutBitmapString(GLUT_BITMAP_TIMES_ROMAN_24, "z= " + str(location[2]))
+        glEnable(GL_LIGHTING)
 
         glPopMatrix()
 
@@ -542,8 +501,9 @@ class Viewer:
         label_idx = int(temp[3]*255.0 + .5)
         label = self.label_dict[label_idx]
         if not np.all(click_color==0):
-            location  = [int(click_color[0]*(self.columns-1)),
-                        int(-(click_color[1]-1)*(self.rows-1)), int(-(click_color[2]-1)*((self.layers-1)))]
+            location = [int(click_color[0]*(self.rows-1)),
+                        int(click_color[1]*(self.columns-1)),
+                        int(click_color[2]*(self.layers-1))]
             glReadBuffer(GL_FRONT)
             marker_color_neg = glReadPixels(x,self.win_h-y, 1,1, GL_RGB, GL_FLOAT)[0][0]
             marker_color = 1-marker_color_neg
