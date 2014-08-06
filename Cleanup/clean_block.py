@@ -7,7 +7,6 @@ import mahotas
 import math
 import h5py
 import time
-import pymaxflow
 import timer
 import os
 
@@ -33,7 +32,7 @@ input_probs = sys.argv[2]
 output_path = sys.argv[3]
 
 # Default settings
-minsegsize = 500
+minsegsize = 100
 
 repair_branches = False
 branch_min_overlap_ratio = 0.9
@@ -64,9 +63,15 @@ while repeat_attempt_i < job_repeat_attempts and not check_file(output_path):
         prob_vol = input_probs_hdf5['probabilities'][...]
         input_probs_hdf5.close()
 
+        has_boundaries = np.any(label_vol==0)
+
         # Compress labels to 32 bit
         inverse, packed_vol = np.unique(label_vol, return_inverse=True)
         nlabels = len(inverse)
+
+        if not has_boundaries:
+            packed_vol = packed_vol + 1
+            nlabels = nlabels + 1
 
         if nlabels <= 1:
             print "Cleanup only found {0} segment - nothing to do.".format(nlabels)
@@ -78,9 +83,10 @@ while repeat_attempt_i < job_repeat_attempts and not check_file(output_path):
             print "Cleanup starting with {0} segments.".format(nlabels)
 
             # Grow labels so there are no boundary pixels
-            for image_i in range(packed_vol.shape[2]):
-                label_image = packed_vol[:,:,image_i]
-                packed_vol[:,:,image_i] = mahotas.cwatershed(np.zeros(label_image.shape, dtype=np.uint32), label_image, return_lines=False)
+            if has_boundaries:
+                for image_i in range(packed_vol.shape[2]):
+                    label_image = packed_vol[:,:,image_i]
+                    packed_vol[:,:,image_i] = mahotas.cwatershed(np.zeros(label_image.shape, dtype=np.uint32), label_image, return_lines=False)
 
             if Debug:
                 from libtiff import TIFF
@@ -291,10 +297,14 @@ while repeat_attempt_i < job_repeat_attempts and not check_file(output_path):
                     tif = TIFF.open('postclean_z{0:04}.tif'.format(image_i), mode='w')
                     tif.write_image(np.uint8(remap_index[packed_vol[:, :, image_i]] * 13 % 251))
 
-            clean_vol = inverse[remap_index[packed_vol]]
+            clean_vol = None
 
             # Restore boundary lines
-            clean_vol[label_vol == 0] = 0
+            if has_boundaries:
+                clean_vol = inverse[remap_index[packed_vol]]
+                clean_vol[label_vol == 0] = 0
+            else:
+                clean_vol = inverse[remap_index[packed_vol]-1]
 
             # Sanity check    
             inverse, packed_vol = np.unique(clean_vol, return_inverse=True)
