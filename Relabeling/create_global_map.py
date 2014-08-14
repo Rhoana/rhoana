@@ -1,3 +1,5 @@
+import remap
+print dir(remap)
 import os
 import sys
 import h5py
@@ -33,41 +35,26 @@ if __name__ == '__main__':
 
             outf = h5py.File(output_path + '_partial', 'w')
 
-            remap = {}
-            next_label = 1
-
             infile = h5py.File(input_path)
             merges = infile['merges'][...]
+            print merges.shape[0], "merges to process"
 
-            # put every pair in the remap
-            for v1, v2 in merges:
-                remap.setdefault(v1, v1)
-                remap.setdefault(v2, v2)
-                while v1 != remap[v1]:
-                    v1 = remap[v1]
-                while v2 != remap[v2]:
-                    v2 = remap[v2]
-                if v1 > v2:
-                    v1, v2 = v2, v1
-                remap[v2] = v1
-
-            # pack values - every value now either maps to itself (and should get its
-            # own label), or it maps to some lower value (which will have already been
-            # mapped to its final value in this loop).
-            remap[0] = 0
-            for v in sorted(remap.keys()):
-                if v == 0:
-                    continue
-                if remap[v] == v:
-                    remap[v] = next_label
-                    next_label += 1
-                else:
-                    remap[v] = remap[remap[v]]
-
+            remapper = remap.Remapper()
+            remapper.add_merges(np.array([0]), np.array([0]))
+            print "add"
+            remapper.add_merges(merges[:, 0], merges[:, 1])
+            print "pack"
+            remapper.pack()
+            print "fetch"
+            src, dest = remapper.fetch()
+            ord = np.argsort(src)
+            src = src[ord]
+            dest = dest[ord]
+            
             # write to hdf5 - needs to be sorted for remap to use searchsorted()
-            ds = outf.create_dataset('remap', (2, len(remap)), merges.dtype)
-            for idx, v in enumerate(sorted(remap.keys())):
-                ds[:, idx] = [v, remap[v]]
+            ds = outf.create_dataset('remap', (2, len(src)), merges.dtype)
+            ds[0, :] = src
+            ds[1, :] = dest
 
             outf.close()
             shutil.move(output_path + '_partial', output_path)
@@ -76,8 +63,10 @@ if __name__ == '__main__':
             print "I/O error({0}): {1}".format(e.errno, e.strerror)
         except KeyboardInterrupt:
             pass
-        except:
-            print "Unexpected error:", sys.exc_info()[0]
+        except Exception, e:
+            print "Unexpected error:", sys.exc_info()
+            import traceback
+            traceback.print_exc()
             if repeat_attempt_i == job_repeat_attempts:
                 raise
             
