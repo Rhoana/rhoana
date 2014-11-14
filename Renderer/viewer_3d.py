@@ -262,32 +262,38 @@ class Viewer:
         glDisable(GL_LIGHTING)  # don't use lighting for color encoding
 
         glMatrixMode(GL_MODELVIEW)
-        glPushMatrix()
-        glTranslatef(-.9, .9, .9)
-        glScalef(1.8 * self.xyscale, -1.8 * self.xyscale, -1.8 * self.zscale)
-        # draw the layers
 
-        glTranslatef(0, 0, z * self.z_spacing)  # shift by Z offset
+        colors = [[]] * len(contours)
+        for idx, cnt in enumerate(contours):
+            clr = np.zeros((cnt.shape[0], 4), np.float)
+            clr[:, :2] = cnt
+            clr[:, 2] = z
+            clr[:, 0] /= self.rows - 1
+            clr[:, 1] /= self.columns - 1
+            clr[:, 2] /= self.layers - 1
+            clr[:, 3] = label_idx/255.0
+            colors[idx] = clr
 
-        glLineWidth(3.0)
-        glEnableClientState(GL_VERTEX_ARRAY)
-        glEnableClientState(GL_COLOR_ARRAY)
-        for cnt in contours:
-            colors = np.zeros((cnt.shape[0], 4), np.float)
-            colors[:, :2] = cnt
-            colors[:, 2] = z
-            colors[:, 0] /= self.rows - 1
-            colors[:, 1] /= self.columns - 1
-            colors[:, 2] /= self.layers - 1
-            colors[:, 3] = label_idx/255.0
+        for offset in range(max(1, int(self.z_spacing))):
+            glPushMatrix()
+            glTranslatef(-.9, .9, .9)
+            glScalef(1.8 * self.xyscale, -1.8 * self.xyscale, -1.8 * self.zscale)
+            # draw the layers
 
-            glVertexPointer(2, GL_INT, 0, cnt)
-            glColorPointer(4, GL_FLOAT, 0, colors)
-            glDrawArrays(GL_LINE_LOOP, 0, cnt.shape[0])
-        glDisableClientState(GL_VERTEX_ARRAY)
-        glDisableClientState(GL_COLOR_ARRAY)
+            glTranslatef(0, 0, z * self.z_spacing + offset)  # shift by Z offset
 
-        glPopMatrix()
+            glLineWidth(1.5)
+            glEnableClientState(GL_VERTEX_ARRAY)
+            glEnableClientState(GL_COLOR_ARRAY)
+            for cnt, clrs in zip(contours, colors):
+                glVertexPointer(2, GL_INT, 0, cnt)
+                glColorPointer(4, GL_FLOAT, 0, clrs)
+                glDrawArrays(GL_LINE_LOOP, 0, cnt.shape[0])
+
+            glDisableClientState(GL_VERTEX_ARRAY)
+            glDisableClientState(GL_COLOR_ARRAY)
+
+            glPopMatrix()
 
         glEnable(GL_LIGHTING)
 
@@ -300,32 +306,38 @@ class Viewer:
         glNewList(self.display_list_idx, GL_COMPILE)
 
         glMatrixMode(GL_MODELVIEW)
-        glPushMatrix()
 
-        glTranslatef(-.9, .9, .9)
-        glScalef(1.8 * self.xyscale, -1.8 * self.xyscale, -1.8 * self.zscale)
-
-        # draw the layers
-        glTranslatef(0, 0, z * self.z_spacing)  # shift by Z offset
         glMaterialfv(GL_FRONT_AND_BACK, GL_AMBIENT_AND_DIFFUSE, color)
-        glEnableClientState(GL_VERTEX_ARRAY)
-        glEnableClientState(GL_NORMAL_ARRAY)
-        glLineWidth(3.0)
-        for cnt in contours:
-            normals = np.zeros((cnt.shape[0], 3), dtype=np.float)
-            normals[:, 0] = - (np.roll(cnt[:, 1], -1) - cnt[:, 1])
-            normals[:, 1] = (np.roll(cnt[:, 0], -1) - cnt[:, 0])
-            normals = normals + np.roll(normals, 1, axis=0)
-            normals = 0.5 * normals + 0.25 * (np.roll(normals, 1, axis=0) + np.roll(normals, -1, axis=0))
-            normals = 0.5 * normals + 0.25 * (np.roll(normals, 1, axis=0) + np.roll(normals, -1, axis=0))
 
-            glVertexPointer(2, GL_INT, 0, cnt)
-            glNormalPointer(GL_FLOAT, 0, normals)
-            glDrawArrays(GL_LINE_LOOP, 0, cnt.shape[0])
+        normals = [[]] * len(contours)
+        for idx, cnt in enumerate(contours):
+            norms = np.zeros((cnt.shape[0], 3), dtype=np.float)
+            norms[:, 0] = - (np.roll(cnt[:, 1], -1) - cnt[:, 1])
+            norms[:, 1] = (np.roll(cnt[:, 0], -1) - cnt[:, 0])
+            norms = norms + np.roll(norms, 1, axis=0)
+            norms = 0.5 * norms + 0.25 * (np.roll(norms, 1, axis=0) + np.roll(norms, -1, axis=0))
+            norms = 0.5 * norms + 0.25 * (np.roll(norms, 1, axis=0) + np.roll(norms, -1, axis=0))
+            normals[idx] = norms
 
-        glDisableClientState(GL_VERTEX_ARRAY)
-        glDisableClientState(GL_NORMAL_ARRAY)
-        glPopMatrix()
+        for offset in range(max(1, int(self.z_spacing))):
+            glPushMatrix()
+            glTranslatef(-.9, .9, .9)
+            glScalef(1.8 * self.xyscale, -1.8 * self.xyscale, -1.8 * self.zscale)
+
+            # draw the layers
+            glTranslatef(0, 0, z * self.z_spacing + offset)  # shift by Z offset
+            glEnableClientState(GL_VERTEX_ARRAY)
+            glEnableClientState(GL_NORMAL_ARRAY)
+            glLineWidth(1.5)
+
+            for cnt, norms in zip(contours, normals):
+                glVertexPointer(2, GL_INT, 0, cnt)
+                glNormalPointer(GL_FLOAT, 0, norms)
+                glDrawArrays(GL_LINE_LOOP, 0, cnt.shape[0])
+
+            glDisableClientState(GL_VERTEX_ARRAY)
+            glDisableClientState(GL_NORMAL_ARRAY)
+            glPopMatrix()
         glEndList()
 
     def make_box_list(self):
