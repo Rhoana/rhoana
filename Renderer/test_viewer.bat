@@ -1,0 +1,1 @@
+python viewer_3d.py -d g:\ac3x20\mojo --xyz=512,512,0 --max_x=1024 --max_y=1024 --z_spacing=7.5 14286847:
