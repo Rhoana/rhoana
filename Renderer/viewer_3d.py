@@ -512,7 +512,7 @@ class Viewer:
 
             location = [int(click_color[0]*(self.rows-1)),
                         int(click_color[1]*(self.columns-1)),
-                        int(click_color[2]*(self.layers-1)) * z_spacing]
+                        int(click_color[2]*(self.layers-1))]
             glReadBuffer(GL_FRONT)
             marker_color_neg = glReadPixels(x,self.win_h-y, 1,1, GL_RGB, GL_FLOAT)[0][0]
             marker_color = 1-marker_color_neg
