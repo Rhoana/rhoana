@@ -536,7 +536,6 @@ class Viewer:
 
 
 if __name__ == '__main__':
-    print OpenGL.GL.__file__, OpenGL.GLU.__file__, OpenGL.GLUT.__file__
     display_queue = Queue()
 
     progname = sys.argv[0]

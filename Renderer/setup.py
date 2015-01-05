@@ -15,7 +15,7 @@ os.environ["PATH"] =\
 folder = r'C:\Python27\Scripts'
 data_files = [(r'.',glob.glob(os.path.join(folder,'*mk2*.dll')))]
 
-setup(console =['viewer_3d.py'], options = {"py2exe":{"excludes":["TkCommands", "Tkinter", "tcl", "OpenGL"], 
+setup(console =['viewer_3d.py'], options = {"py2exe":{"excludes":["TkCommands", "Tkinter", "tcl", "XOpenGL"], 
                                                     "includes": ["zmq.utils", "zmq.utils.jsonapi", "zmq.utils.strtypes", "h5py.*",
                                                                 "numpy", "numpy.*", "numpy.linalg", "numpy.core", "scipy",
                                                                 "ctypes", "logging"] }},

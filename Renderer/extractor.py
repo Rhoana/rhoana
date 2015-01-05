@@ -23,7 +23,7 @@ import Polygon
 
 import scipy.ndimage as sp
 
-import sqlite3 as sqlite
+from pysqlite2 import dbapi2 as sqlite
 
 def contours_to_poly(contours, hierarchy):
     def is_hole(idx):
