@@ -471,18 +471,24 @@ class Viewer:
             sys.exit()
         if key == chr(8):  # backspace to refresh/clear
             self.refresh()
-        if key == chr(117):  # u to undo
+        if key == 'u':  # u to undo
             self.undo()
-        if key == chr(116):  # t to translate to mouse location
+        if key == 't':  # t to translate to mouse location
             self.translate(x,y)
-        if key == chr(99):  # c to center the box
+        if key == 'c':  # c to center the box
             self.reset_translation()
-        if (key == chr(105) or key == chr(106) or key == chr(107) or key == chr(108)):  # i, j, k, l to translate by increment
+        if key in 'ijkl':
             self.shift(key)
-        if (key == chr(114)):  # r to reset the translation and zoom
+        if (key == 'r'):  # r to reset the translation and zoom
             self.reset()
-        if (key == chr(122)):  # z to reset the zoom
+        if (key == 'z'):  # z to reset the zoom
             self.reset_zoom()
+        if (key == '+'):
+            self.fov -= 1
+            glutPostRedisplay()
+        if (key == '-'):
+            self.fov += 1
+            glutPostRedisplay()
         return
 
     def on_scroll(self, wheel, direction, x, y):
