@@ -21,7 +21,6 @@ from Queue import Queue
 
 import Polygon
 
-import scipy.ndimage as sp
 
 from pysqlite2 import dbapi2 as sqlite
 

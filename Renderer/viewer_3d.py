@@ -38,7 +38,7 @@ except AttributeError:
     pass
 
 class Viewer:
-    def __init__(self, location, in_q, directory, max_x, max_y, z_spacing):
+    def __init__(self, location, start_label, in_q, directory, max_x, max_y, z_spacing):
         self.st = time.time()
         self.win_h = 1000
         self.win_w = 1000
@@ -59,6 +59,7 @@ class Viewer:
 
         self.left = None  # keep track of left button status
         self.pick_location = location
+        self.label = start_label
 
         self.display_list_idx = 2  # count from 1 and use first index for box
         self.display_list_dict = dict()  # COLOR as key, display_list indices as value
@@ -109,7 +110,10 @@ class Viewer:
         glHint(GL_LINE_SMOOTH_HINT, GL_NICEST);
         glHint(GL_POLYGON_SMOOTH_HINT, GL_NICEST);
         glEnable(GL_LINE_SMOOTH);
-        glEnable(GL_MULTISAMPLE);
+        try:
+            glEnable(GL_MULTISAMPLE)
+        except:
+            pass
 
         glLightfv(GL_LIGHT0, GL_SPECULAR, (0,0,0))
 
@@ -436,7 +440,7 @@ class Viewer:
         glPushMatrix()
         glTranslatef(location[0],
                      location[1],
-                     location[2])
+                     location[2] * self.z_spacing)
         glColor3fv(self.marker_color)
 
         glEnable(GL_LIGHTING)
@@ -446,10 +450,10 @@ class Viewer:
          # draw a square parellel to z plane at z level of marker
         glBegin(GL_LINE_LOOP)
         glColor3f(1.0, 1.0, 1.0)
-        glVertex3f(0, 0, location[2])
-        glVertex3f(self.rows, 0, location[2])
-        glVertex3f(self.rows, self.columns, location[2])
-        glVertex3f(0, self.columns, location[2])
+        glVertex3f(0, 0, location[2] * self.z_spacing)
+        glVertex3f(self.rows, 0, location[2] * self.z_spacing)
+        glVertex3f(self.rows, self.columns, location[2] * self.z_spacing)
+        glVertex3f(0, self.columns, location[2] * self.z_spacing)
         glEnd()
 
 
@@ -571,7 +575,7 @@ if __name__ == '__main__':
         ids += [primary_id + secondary_ids]
 
     extr = extractor.Extractor(display_queue, directory, ids, location, max_x, max_y, 0)
-    viewer  = Viewer(location, display_queue, directory, max_x, max_y, z_spacing)
+    viewer  = Viewer(location, ids[0][0], display_queue, directory, max_x, max_y, z_spacing)
 
     viewer.extractor_dict[ids[0][0]] = extr
     handler = handler.Input_Handler(display_queue)
