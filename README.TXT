@@ -88,4 +88,3 @@ Extract Label Plane performs rougly the following action:
      input_data = infile['labels'][:, :, Z]
      output_labels[ibase:ibase+input_data.shape[0],
                    jbase:jbase+input_data.shape[1]] = intput_data
-
