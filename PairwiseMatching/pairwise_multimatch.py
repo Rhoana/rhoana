@@ -15,11 +15,15 @@ def check_file(filename):
     if not os.path.exists(filename):
         return False
     # verify the file has the expected data
-    import h5py
-    f = h5py.File(filename, 'r')
-    fkeys = f.keys()
-    f.close()
-    if set(fkeys) != set(['labels']) and set(fkeys) != set(['labels', 'merges']):
+    try:
+        f = h5py.File(filename, 'r')
+        fkeys = f.keys()
+        f.close()
+        if set(fkeys) != set(['labels']) and set(fkeys) != set(['labels', 'merges']):
+            os.unlink(filename)
+            return False
+    except IOError as e:
+        print "I/O error({0}): {1}".format(e.errno, e.strerror)
         os.unlink(filename)
         return False
     return True
@@ -75,29 +79,28 @@ while repeat_attempt_i < job_repeat_attempts and not (
         print 'Running pairwise matching', " ".join(sys.argv[1:])
 
         # Extract overlapping regions
-        for ntry in range(5):
-            try:
-                bl1f = h5py.File(block1_path, 'r')
-                block1 = bl1f['labels'][...]
-                label_chunks = bl1f['labels'].chunks
-                if 'merges' in bl1f:
-                    previous_merges1 = bl1f['merges'][...]
-                else:
-                    previous_merges1 = None
-                bl1f.close()
+        try:
+            bl1f = h5py.File(block1_path, 'r')
+            block1 = bl1f['labels'][...]
+            label_chunks = bl1f['labels'].chunks
+            if 'merges' in bl1f:
+                previous_merges1 = bl1f['merges'][...]
+            else:
+                previous_merges1 = None
+            bl1f.close()
 
-                bl2f = h5py.File(block2_path, 'r')
-                block2 = bl2f['labels'][...]
-                if 'merges' in bl2f:
-                    previous_merges2 = bl2f['merges'][...]
-                else:
-                    previous_merges2 = None
-                bl2f.close()
+            bl2f = h5py.File(block2_path, 'r')
+            block2 = bl2f['labels'][...]
+            if 'merges' in bl2f:
+                previous_merges2 = bl2f['merges'][...]
+            else:
+                previous_merges2 = None
+            bl2f.close()
 
-            except IOError:
-                print "IOError reading hdf5 (try {0}). Waiting...".format(ntry)
-                time.sleep(10)
-                pass
+        except IOError:
+            print "IOError reading hdf5. Waiting..."
+            time.sleep(10)
+            pass
 
         assert block1.size == block2.size
 

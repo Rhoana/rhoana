@@ -49,17 +49,13 @@ while repeat_attempt_i < job_repeat_attempts and not check_file(segmentations_fi
 
     try:
 
-        # if not os.path.exists(features_file):
-        #     temp_features_file = features_file + "_tmp"
-        #     print "Computing features:", features_prog, image_file, temp_features_file
-        #     subprocess.check_call([features_prog, image_file, temp_features_file], env=os.environ)
-        #     os.rename(temp_features_file, features_file)
-
         if not os.path.exists(probabilities_file):
-            print "Computing probabilities:", classify_prog, image_file, stump_file, classifier, probabilities_file
-            subprocess.check_call(['python', classify_prog, image_file, stump_file, classifier, probabilities_file], env=os.environ)
+            # print "Computing probabilities:", classify_prog, image_file, stump_file, classifier, probabilities_file
+            # subprocess.check_call(['python', classify_prog, image_file, stump_file, classifier, probabilities_file], env=os.environ)
+            print "Computing probabilities:", classify_prog, image_file, classifier, probabilities_file
+            subprocess.check_call(['python', classify_prog, image_file, classifier, probabilities_file], env=os.environ)
 
-        print "Computing segmentations:", segmentation_prog, probabilities_file, segmentations_file
+        print "Computing segmentations:", segmentation_prog, probabilities_file, image_file, segmentations_file
         subprocess.check_call(['python', segmentation_prog, probabilities_file, image_file, segmentations_file], env=os.environ)
 
     except IOError as e:

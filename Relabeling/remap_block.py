@@ -55,12 +55,13 @@ if __name__ == '__main__':
             outf.close()
             shutil.move(output_path + '_partial', output_path)
 
-        except IOError as e:
-            print "I/O error({0}): {1}".format(e.errno, e.strerror)
-        except KeyboardInterrupt:
-            pass
+        # except IOError as e:
+        #     print "I/O error({0}): {1}".format(e.errno, e.strerror)
+        # except KeyboardInterrupt:
+        #     pass
         except:
             print "Unexpected error:", sys.exc_info()[0]
+            raise
             if repeat_attempt_i == job_repeat_attempts:
                 raise
             
