@@ -26,10 +26,16 @@ CACHE_DIR = os.path.join(WORK_DIR, 'cache')
 SEGMENT_JOIN_THRESHOLD = 0.5
 
 if __name__ == '__main__':
+    # set up directories if needed
+    if not os.path.exists(WORK_DIR):
+        os.makedirs(WORK_DIR)
+    if not os.path.exists(CACHE_DIR):
+        os.makedirs(CACHE_DIR)
+
     # fetch and cache data
     data_zip = fetch('AC3.zip', CACHE_DIR)
     ground_truth_zip = fetch('AC3-gt.zip', CACHE_DIR)
-    membrane_classifier_file = fetch('AC3-membrane-classifier', CACHE_DIR)
+    membrane_classifier_file = fetch('AC3-membrane-classifier.pkl', CACHE_DIR)
 
     # set up data storage
     storage = HDF5Storage(os.path.join(WORK_DIR, 'data'))
