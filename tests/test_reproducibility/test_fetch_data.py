@@ -19,7 +19,7 @@ class TestExample(unittest.TestCase):
         testfile = 'small.zip'
         fetch(testfile, self.test_dir)
         path = os.path.join(self.test_dir, testfile)
-        self.assertTrue(os.path.exists(path+'a'))
+        self.assertTrue(os.path.exists(path))
 
         h = hashlib.md5()
         h.update(open(path, 'rb').read())
