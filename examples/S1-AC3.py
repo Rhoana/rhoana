@@ -10,15 +10,19 @@ from rhoana.io import ingest_zip
 
 from rhoana.backends.compute import LocalRunner
 from rhoana.backends.storage import HDF5Storage
-from rhoana.membranes import ClassifierCNN
-from rhoana.segmentation.overseg import overseg_by_watershed
-from rhoana.segmentation import join_by_threshold
-from rhoana.blocking import dice, extract_block, embed_block, neighbor_pairs
-from rhoana.blocking import stable_marriage_overlap
-from rhoana.relabel import combine_remap_tables
-from rhoana.reproducibility.evaluate import F_rand_and_VI
-
+# from rhoana.membranes import ClassifierCNN
+# from rhoana.segmentation.overseg import overseg_by_watershed
+# from rhoana.segmentation import join_by_threshold
+# from rhoana.blocking import dice, extract_block, embed_block, neighbor_pairs
+# from rhoana.blocking import stable_marriage_overlap
+# from rhoana.relabel import combine_remap_tables
+# from rhoana.reproducibility.evaluate import F_rand_and_VI
+# 
 import os.path
+
+import logging
+logging.basicConfig(level=logging.DEBUG)
+
 
 # TODO: configurable
 WORK_DIR = 'datasets/AC3'
@@ -38,15 +42,15 @@ if __name__ == '__main__':
     membrane_classifier_file = fetch('AC3-membrane-classifier.pkl', CACHE_DIR)
 
     # set up data storage
-    storage = HDF5Storage(os.path.join(WORK_DIR, 'data'))
+    storage = HDF5Storage(os.path.join(WORK_DIR, 'data'), truncate=True)
 
     # set up job runner
-    runner = LocalRunner(storage, cpus=1)
+    runner = LocalRunner(storage, num_cpus=1)
 
     # import raw images
     raw_data = ingest_zip(data_zip, storage)
-    print("Ingested raw data volume: {} slices, {}x{} pixels"
-          .format(raw_data.depth, raw_data.width, raw_data.height))
+    print("Ingested raw data volume: {} slices, {}x{} pixels, {} channel(s)"
+          .format(raw_data.depth, raw_data.width, raw_data.height, raw_data.channels))
 
     # classify membranes
     classifier = ClassifierCNN(membrane_classifier_file)

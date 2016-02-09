@@ -26,3 +26,6 @@ def fetch(dataset_name,
     except Exception as err:
         rlogger.exception("Downloading {}".format(url))
     return file_path
+
+# TODO:
+#   report bandwidth, download time
