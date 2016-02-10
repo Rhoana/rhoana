@@ -6,7 +6,7 @@ means HDF5Storage, but in the future, this could include
 OpenConnectome (<http://www.openconnectomeproject.org/>) or Microns
 Boss (Block and Object Storage Service).
 
-Storage objects have a *new_dataset* method taking a name, shape, and dtype.
+Storage objects have a ``new_dataset`` method taking a name, shape, and dtype, and returning a **Dataset** object.
 
     >>> store = HDF5Storage('datastore.hdf5')
     >>> ds = store.new_dataset("test", (5, 5), float)
@@ -31,3 +31,8 @@ in-place modification), depending on the backend.
            [ 0.,  0.,  0.,  0.,  0.],
            [ 0.,  0.,  0.,  0.,  0.]])
 
+TODO:
+- fetching existing dataset
+- extracting subvolumes as new datasets
+- efficiently merging existing (possibly overlapping) datasets
+- export?  (via numpy?)
