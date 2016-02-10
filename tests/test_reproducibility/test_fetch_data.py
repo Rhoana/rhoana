@@ -6,7 +6,7 @@ import hashlib
 
 from rhoana.reproducibility import fetch
 
-class TestExample(unittest.TestCase):
+class TestFetchData(unittest.TestCase):
     def setUp(self):
         # Create a temporary directory
         self.test_dir = tempfile.mkdtemp()

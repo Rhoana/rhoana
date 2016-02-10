@@ -1,3 +1,4 @@
+import os
 import h5py
 
 class HDF5Storage(object):
@@ -9,9 +10,10 @@ class HDF5Storage(object):
         self.store = h5py.File(path, 'w' if truncate else 'a')
 
     def __str__(self):
-        return "HDF5({})".format(self.path)
+        return "HDF5(path: {})".format(os.path.abspath(self.path))
 
     def new_dataset(self, name, shape, dtype):
+        # TODO: handle exceptions
         ds = self.store.create_dataset(name, shape, dtype=dtype)
         return HDF5Wrapper(self, ds)
 
@@ -21,10 +23,19 @@ class HDF5Wrapper(object):
     def __init__(self, storage, hdf5_dataset):
         self.storage = storage
         self.hdf5_dataset = hdf5_dataset
-        self.depth, self.width, self.height, self.channels = hdf5_dataset.shape
 
     def __getitem__(self, slice):
         return self.hdf5_dataset[slice]
 
     def __setitem__(self, slice, value):
         self.hdf5_dataset[slice] = value
+
+    @property
+    def shape(self):
+        return self.hdf5_dataset.shape
+
+    def __str__(self):
+        return "HDF5 dataset {} in {}".format(self.hdf5_dataset.name, str(self.storage))
+
+# TODO:
+#  list of existing datasets

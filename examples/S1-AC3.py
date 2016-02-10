@@ -50,7 +50,7 @@ if __name__ == '__main__':
     # import raw images
     raw_data = ingest_zip(data_zip, storage)
     print("Ingested raw data volume: {} slices, {}x{} pixels, {} channel(s)"
-          .format(raw_data.depth, raw_data.width, raw_data.height, raw_data.channels))
+          .format(*(raw_data.shape)))
 
     # classify membranes
     classifier = ClassifierCNN(membrane_classifier_file)
