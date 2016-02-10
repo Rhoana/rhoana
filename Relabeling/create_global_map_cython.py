@@ -4,6 +4,8 @@ import h5py
 import shutil
 
 import numpy as np
+import pyximport
+pyximport.install()
 from fast_create_remap import fast_create_remap
 
 job_repeat_attempts = 5
