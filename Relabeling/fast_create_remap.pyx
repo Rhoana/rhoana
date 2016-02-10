@@ -41,7 +41,7 @@ cpdef fast_create_remap(unsigned long long[:,:] merges):
             remap[v] = remap[remap[v]]
 
     # write to hdf5 - needs to be sorted for remap to use searchsorted()
-    ds = np.zeros((2, len(remap)), dtype=np.uint64)
+    ds = np.zeros((2, len(remap_keys)), dtype=np.uint64)
     for idx in range(len(remap_keys)):
         v = remap_keys[idx]
         ds[0, idx] = v

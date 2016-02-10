@@ -15,9 +15,8 @@ SBATCH_PARTITION_LIST = ['serial_requeue']
 #SBATCH_PARTITION_LIST = ['holyseasgpu']
 #SBATCH_PARTITION_LIST = ['general', 'serial_requeue']
 #SBATCH_PARTITION_LIST = ['general', 'general', 'serial_requeue']
-#SBATCH_GPU_PARTITION_LIST = ["gpgpu", "resonance"]
-#SBATCH_GPU_PARTITION_LIST = ["gpgpu"]
 SBATCH_GPU_PARTITION_LIST = ["holyseasgpu"]
+#SBATCH_GPU_PARTITION_LIST = ["gpgpu", "resonance"]
 SBATCH_ACCOUNT = None #(Use default account for current user)
 #SBATCH_ACCOUNT = 'pfister_lab'
 
@@ -41,8 +40,7 @@ TIME_FACTOR = 1
 # - (Because os.path.exists() invokes os.stat(), requesting full file info including size etc.)
 # - os.stat() is only slow the first time for each file and is not so bad for a small number (1-10k) of files.
 # - For large numbers (100k+) of files this makes checking which jobs have completed very slow.
-# - Here we initialize a dictionary of files that exist using the faster os.listdir()
-# - And maintain a cache of existing / non-existing files.
+# - Here we maintain a dictionary of files that exist on startup using the faster os.listdir()
 
 subdirs = [
     'bigdicedblocks',
@@ -51,7 +49,6 @@ subdirs = [
     'joins',
     'output_labels',
     'output_overlay',
-    'output_index',
     'oversegmentations',
     'pairwise_matches_X_even',
     'pairwise_matches_X_odd',
@@ -62,37 +59,17 @@ subdirs = [
     'relabeledblocks',
     'segmentations']
 
-existing_files_dict = {}
-non_existing_files_dict = {}
-file_recheck_time_seconds = 60
-
 start_time = time.time()
+start_filesdict = {}
 for subdir in subdirs:
     if os.path.exists(subdir):
         files = os.listdir(subdir)
         for f in files:
-            existing_files_dict[os.path.join(subdir, f)] = None
-print "loaded existing files in {0} seconds.".format(time.time() - start_time)
+            start_filesdict[os.path.join(subdir, f)] = None
+print "loaded starting files in {0} seconds.".format(time.time() - start_time)
 
-def fast_exists(fname, check_time):
-    if fname in existing_files_dict:
-        return True
-    elif fname in non_existing_files_dict:
-        if non_existing_files_dict[fname] > check_time:
-            return False
-        elif os.path.exists(fname):
-            del non_existing_files_dict[fname]
-            existing_files_dict[fname] = None
-            return True
-        else:
-            non_existing_files_dict[fname] = check_time + file_recheck_time_seconds
-            return False
-    elif os.path.exists(fname):
-        existing_files_dict[fname] = None
-        return True
-    else:
-        non_existing_files_dict[fname] = check_time + file_recheck_time_seconds
-        return False
+def fast_exists(fname):
+    return fname in start_filesdict or os.path.exists(fname)
 
 ######## filename cache end ########
 
@@ -115,19 +92,18 @@ class Job(object):
         self.try_count = 0
         Job.all_jobs.append(self)
 
-    def get_done(self, check_time=time.time()):
+    def get_done(self):
         if self.already_done:
             return True
         all_outputs = self.output if isinstance(self.output, (list, tuple)) else [self.output]
-        for f in all_outputs:
-            if not fast_exists(f, check_time):
-                return False
-        self.already_done = True
-        return True
+        if all([fast_exists(f) for f in all_outputs]):
+            self.already_done = True
+            return True
+        return False
 
-    def dependendencies_done(self, check_time=time.time()):
+    def dependendencies_done(self):
         for d in self.dependencies:
-            if not d.get_done(check_time):
+            if not d.get_done():
                 return False
         return True
 
@@ -162,7 +138,7 @@ class Job(object):
                 "-p", partition,                   # Work queue (partition) = general / unrestricted / interactive / serial_requeue
                 "--requeue",
                 #"--exclude=holy2b05105,hp1301,hp0403",           # Exclude some bad nodes - holy2b05105 did not have scratch2 mapped.
-                "--exclude=regal02",                              # Exclude some bad nodes - regal02 very slow
+                "--exclude=regal[01-20]",                              # Exclude some bad nodes - regal[01-20] very slow
                 "-n", str(self.processors),        # Number of processors
                 "-t", str(self.time),              # Time in munites 1440 = 24 hours
                 "--mem-per-cpu", str(int(self.memory * MEMORY_FACTOR)), # Max memory in MB (strict - attempts to allocate more memory will fail)
@@ -176,6 +152,8 @@ class Job(object):
                 if partition == "gpgpu":
                     #command_list += ["--nodelist=holygpu[01-16]"]
                     command_list += ["--exclude=aaggpu[01-08]"]
+                if partition == "resonance":
+                    command_list += ["--exclude=seasgpu15"] 
 
             if SBATCH_ACCOUNT is not None:
                 command_list += ["--account={0}".format(SBATCH_ACCOUNT)]
@@ -192,10 +170,6 @@ class Job(object):
 
             job_command = " ".join(self.command())
 
-            ## Testing with backup fusedblocks jobs
-            # job_command = " ".join(self.command()).replace('fusedblock_', 'fusedblock_backupA_')
-            # print job_command
-
             # Setup GPU environment
             if self.gpus > 0:
                 job_command = "source ~/dev/setup_env_generic.sh\nwhich python\nhostname\nnvcc --version\n" + job_command
@@ -207,7 +181,7 @@ class Job(object):
 
             if len(sbatch_err) == 0:
                 self.jobid = sbatch_out.split()[3]
-                print 'jobid={0}'.format(self.jobid)
+                #print 'jobid={0}'.format(self.jobid)
 
         else:
             subprocess.check_call(["bsub",
@@ -284,6 +258,8 @@ class Job(object):
                 if partition == "gpgpu":
                     #command_list += ["--nodelist=holygpu[01-16]"]
                     command_list += ["--exclude=aaggpu[01-08]"] 
+                if partition == "resonance":
+                    command_list += ["--exclude=seasgpu15"] 
 
             if SBATCH_ACCOUNT is not None:
                 command_list += ["--account={0}".format(SBATCH_ACCOUNT)]
@@ -352,6 +328,8 @@ class Job(object):
         process = subprocess.Popen(command_list, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         submit_out, submit_err = process.communicate(full_command)
 
+        print submit_out, submit_err
+
         # Process output
         if len(submit_err) == 0:
             if USE_SBATCH:
@@ -401,7 +379,7 @@ class Job(object):
 
             # See if we can fit this job into the current multicore job
             if (not contains_dependent and (required_cores + j.processors <= MAX_CORES and
-                required_memory + j.memory <= MAX_MEMORY_MB and
+                (required_memory + j.memory <= MAX_MEMORY_MB or required_memory == 0) and
                 j.gpus == 0) or len(job_block_list[0]) == 0):
                 # Add this job to the job list
                 required_cores += j.processors
@@ -582,9 +560,8 @@ class Job(object):
             run_count = 0
             block_count = 0
             runnable_jobs = []
-            check_time = time.time()
             for j in cls.all_jobs:
-                if j.name not in pending_running_complete_jobs and j.dependendencies_done(check_time) and not j.get_done(check_time):
+                if j.name not in pending_running_complete_jobs and j.dependendencies_done() and not j.get_done():
                     runnable_jobs.append(j)
                     run_count += 1
 
@@ -759,9 +736,8 @@ class Job(object):
             print gpu_partition_list
 
             run_count = 0
-            check_time = time.time()
             for j in cls.all_jobs:
-                if j.name not in pending_running_complete_jobs and j.dependendencies_done(check_time):
+                if j.name not in pending_running_complete_jobs and j.dependendencies_done():
                     run_count += j.run(partition_list=partition_list, gpu_partition_list=gpu_partition_list)
 
             print 'Found {0} pending, {1} running, {2} complete, {3} failed, {4} cancelled, {5} timeout, {6} unknown status and {7} non-matching jobs.'.format(
@@ -783,8 +759,8 @@ class JobSplit(object):
         self.idx = idx
         self.name = job.name
 
-    def get_done(self, check_time=time.time()):
-        return self.job.get_done(check_time)
+    def get_done(self):
+        return self.job.get_done()
 
     def set_done(self, val):
         self.job.already_done = val
@@ -867,9 +843,11 @@ class Classify_Image(Job):
         self.classifier_file = classifier_file
         self.dependencies = []
         self.gpus = 1
-        self.memory = 4000
+        self.memory = 1000
         self.time = 180
+        # reusing existing probs
         self.output = os.path.join('segmentations', 'probs_%05d.hdf5' % (idx))
+        #self.output = os.path.join('segmentations', 'probs_%d.hdf5' % (idx))
         #self.already_done = os.path.exists(self.output)
 
     def command(self):
@@ -884,7 +862,7 @@ class Segment_Image(Job):
         self.dependencies = [classifier]
         self.memory = 2000
         self.time = 120
-        self.output = os.path.join('segmentations', 'segs_%05d.hdf5' % (idx))
+        self.output = os.path.join('oversegmentations', 'segs_%05d.hdf5' % (idx))
         #self.already_done = os.path.exists(self.output)
 
     def command(self):
@@ -906,28 +884,35 @@ class Block(Job):
         return ['python', os.path.join(os.environ['CONNECTOME'], 'Control', 'dice_block.py')] + self.args + [s.output for s in self.segmented_slices]
 
 class FusedBlock(Job):
-    def __init__(self, block, indices, global_block_number, fusion_cplex_threads=4):
+    def __init__(self, block, indices, random_forest_file, global_block_number, gala_random_forest_threads=1):
         Job.__init__(self)
         self.already_done = False
         self.block = block
+        self.random_forest_file = random_forest_file
         self.global_block_number = global_block_number
         self.dependencies = [block]
         #self.processors = 4
-        self.processors = fusion_cplex_threads
+        self.processors = gala_random_forset_threads
         #self.memory = 20000
         self.memory = 16000
+        #self.memory = 10000
         # memory is per proc, so we are requesting 64GB here (and sometimes use it)
-        self.time = 720
-        #self.time = 540
         #self.time = 360
-        #self.time = 180
+        #self.time = 480
+        self.time = 720
+        #self.time = 1440
+        # choosing precalculated segmentation
+        if fast_exists(os.path.join('bigfusedblocks', 'fusedblock_%d_%d_%d.hdf5.allagglo.h5' % indices)):
+            self.memory = 6000
+            self.time = 30
         self.indices = indices
         self.output = os.path.join('bigfusedblocks', 'fusedblock_%d_%d_%d.hdf5' % indices)
         #self.already_done = os.path.exists(self.output)
 
     def command(self):
         return ['python',
-                os.path.join(os.environ['CONNECTOME'], 'WindowFusion', 'window_fusion_cpx.py'),
+                os.path.join(os.environ['CONNECTOME'], 'WindowFusion', 'gala_agglomerate.py'),
+                self.random_forest_file,
                 self.block.output,
                 str(self.global_block_number),
                 self.output]
@@ -940,7 +925,8 @@ class CleanBlock(Job):
         self.block = fusedblock.block
         self.global_block_number = fusedblock.global_block_number
         self.dependencies = [fusedblock]
-        self.memory = 6000
+        self.memory = 3000
+        #self.memory = 6000
         #self.memory = 8000
         #self.time = 60
         self.time = 30
@@ -964,7 +950,7 @@ class PairwiseMatching(Job):
         #self.memory = 16000
         #self.memory = 8000
         #self.memory = 4000
-        self.memory = 2000
+        self.memory = 3000
         #self.memory = 500
         #self.time = 60
         #self.time = 30
@@ -999,8 +985,11 @@ class GlobalRemap(Job):
         Job.__init__(self)
         self.already_done = False
         self.dependencies = [joinjob]
+        #self.memory = 8000
+        #self.memory = 16000
         self.memory = 32000
-        self.time = 960
+        #self.time = 480
+        self.time = 720
         self.joinfile = joinjob.output
         self.output = os.path.join('joins', outfilename)
         #self.already_done = os.path.exists(self.output)
@@ -1019,7 +1008,7 @@ class RemapBlock(Job):
         self.memory = 2000
         #self.time = 60
         #self.time = 30
-        self.time = 2
+        self.time = 5
         self.inputfile = blockjob.output
         self.mapfile = build_remap_job.output
         self.indices = indices
@@ -1047,7 +1036,7 @@ class ExtractLabelPlane(Job):
         Job.__init__(self)
         self.already_done = False
         self.dependencies = remapped_blocks
-        self.memory = 2000
+        self.memory = 1000
         self.time = 60
         self.zoffset = zoffset
         self.xy_halo = xy_halo
@@ -1074,7 +1063,7 @@ class ExtractOverlayPlane(Job):
         Job.__init__(self)
         self.already_done = False
         self.dependencies = remapped_blocks
-        self.memory = 4000
+        self.memory = 2000
         self.time = 60
         self.zoffset = zoffset
         self.xy_halo = xy_halo
@@ -1094,51 +1083,6 @@ class ExtractOverlayPlane(Job):
     def command(self):
         return [os.path.join(os.environ['CONNECTOME'], 'Control', 'extract_overlay_plane.sh'), self.output, self.input_image_path, str(self.image_size[0]), str(self.image_size[1]), str(self.zoffset), str(self.xy_halo)] + \
             list(self.generate_args())
-
-class CalculateIndexPlane(Job):
-    def __init__(self, zplane, label_plane):
-        Job.__init__(self)
-        self.already_done = False
-        self.dependencies = [label_plane]
-        self.label_image = label_plane.output
-        self.memory = 4000
-        self.time = 60
-        self.zplane = zplane
-        self.output = os.path.join('output_index', 'index_%05d.h5' % zplane)
-        #self.already_done = os.path.exists(self.output)
-
-    def command(self):
-        return [os.path.join(os.environ['CONNECTOME'], 'Control', 'calculate_index_plane.sh'), self.label_image, str(self.zplane), self.output]
-
-class MergeDownsampleIndex(Job):
-    def __init__(self, outfilename, inputs):
-        Job.__init__(self)
-        self.already_done = False
-        self.dependencies = inputs
-        self.memory = 4000
-        self.time = 240
-        self.output = os.path.join('output_index', outfilename)
-        #self.already_done = os.path.exists(self.output)
-        
-    def command(self):
-        return [os.path.join(os.environ['CONNECTOME'], 'Control', 'merge_index_ds884.sh')] + \
-            [s.output for s in self.dependencies] + \
-            [self.output]
-
-class MergeIndex(Job):
-    def __init__(self, outfilename, inputs):
-        Job.__init__(self)
-        self.already_done = False
-        self.dependencies = inputs
-        self.memory = 4000
-        self.time = 240
-        self.output = os.path.join('output_index', outfilename)
-        #self.already_done = os.path.exists(self.output)
-        
-    def command(self):
-        return [os.path.join(os.environ['CONNECTOME'], 'Control', 'merge_index.sh')] + \
-            [s.output for s in self.dependencies] + \
-            [self.output]
 
 
 ###############################
@@ -1184,7 +1128,9 @@ if __name__ == '__main__':
 
     classify_prog = os.path.join(os.environ['CONNECTOME'], 'DeepNets', 'classify_image_slow_h5.py')
     classifier_file = os.path.join(os.environ['CONNECTOME'], 'DeepNets', 'lgn49m10aamega_ds4_200k_seed11_continued.pkl')
-    segmentation_prog = os.path.join(os.environ['CONNECTOME'], 'Segment', 'segment_ws.py')
+    #segmentation_prog = os.path.join(os.environ['CONNECTOME'], 'Segment', 'segment_ws.py')
+    segmentation_prog = os.path.join(os.environ['CONNECTOME'], 'Segment', 'segment_ws_for_gala.py')
+    random_forest_file = 'gala_randomforest_ne255_md50_combo_segs_small_ws.pkl.gz'
 
     settings_file = sys.argv[1]
     os.environ['CONNECTOME_SETTINGS'] = settings_file
@@ -1207,7 +1153,7 @@ if __name__ == '__main__':
     nblocks_x = (image_size[0] - 2 * block_xy_halo) / block_xy_size
     nblocks_y = (image_size[1] - 2 * block_xy_halo) / block_xy_size
     nblocks_z = (len(segmentations) - 2 * block_z_halo) / block_z_size
-    print "Making {0}x{1}x{2} fusion block volume.".format(nblocks_x, nblocks_y, nblocks_z)
+    print "Making {0}x{1}x{2} gala block volume.".format(nblocks_x, nblocks_y, nblocks_z)
     block_order = []
     hi_slice = 0
     for block_idx_z in range(nblocks_z):
@@ -1219,10 +1165,10 @@ if __name__ == '__main__':
             for block_idx_x in range(nblocks_x):
                 xlo = block_idx_x * block_xy_size
                 xhi = xlo + block_xy_size + 2 * block_xy_halo
-                print "Making block {0}, slice {1}, crop {2}.".format(
-                    (block_idx_x, block_idx_y, block_idx_z),
-                    (lo_slice, hi_slice),
-                    (xlo, ylo, xhi, yhi))
+                # print "Making block {0}, slice {1}, crop {2}.".format(
+                #     (block_idx_x, block_idx_y, block_idx_z),
+                #     (lo_slice, hi_slice),
+                #     (xlo, ylo, xhi, yhi))
                 blocks[block_idx_x, block_idx_y, block_idx_z] = \
                     Block(segmentations[lo_slice:hi_slice],
                           (block_idx_x, block_idx_y, block_idx_z),
@@ -1231,8 +1177,8 @@ if __name__ == '__main__':
 
     # Window fuse all blocks
     # Generate block id based on on block index with z as most significant (allows additional slabs to be added later)
-    fused_blocks = dict((idxs, FusedBlock(blocks[idxs], idxs,
-        idxs[0] + idxs[1] * nblocks_x + idxs[2] * nblocks_x * nblocks_y, fusion_cplex_threads)) for idxs in block_order)
+    fused_blocks = dict((idxs, FusedBlock(blocks[idxs], idxs, random_forest_file,
+        idxs[0] + idxs[1] * nblocks_x + idxs[2] * nblocks_x * nblocks_y, gala_random_forset_threads)) for idxs in block_order)
 
     # Cleanup all blocks (remove small or completely enclosed segments)
     cleaned_blocks = dict((idxs, CleanBlock(fused_blocks[idxs])) for idxs in block_order)
@@ -1295,29 +1241,7 @@ if __name__ == '__main__':
                                        image_size, block_xy_size, im)
                     for idx, im in enumerate(images[:hi_slice])]
 
-    # optional, calculate pixel index and merge into single index file
-    # if os.path.exists(index_stats_file):
-    #     output_index = [CalculateIndexPlane(idx, im)
-    #                     for idx, im in enumerate(output_labels)]
-
-    #     all_merges = []
-    #     current_merge = []
-    #     merge_phase = 0
-    #     merge_n = 12
-    #     for merge_from in range(0, len(output_index), merge_n):
-    #         merge_to = np.minimum(merge_from + merge_n, len(output_index))
-    #         current_merge.append(MergeDownsampleIndex('merge{0}_{1}-{2}.h5'.format(merge_phase, merge_from, merge_to-1), output_index[merge_from:merge_to]))
-    #     all_merges.append(current_merge)
-
-    #     while(len(current_merge) > 1):
-    #         merge_phase += 1
-    #         current_merge = []
-    #         for merge_from in range(0, len(all_merges[-1]), merge_n):
-    #             merge_to = np.minimum(merge_from + merge_n, len(all_merges[-1]))
-    #             current_merge.append(MergeIndex('merge{0}_{1}-{2}.h5'.format(merge_phase, merge_from, merge_to-1), all_merges[-1][merge_from:merge_to]))
-    #         all_merges.append(current_merge)
-
-    # # Render fused / cleaned blocks directly (for debugging)
+    # # Render fused blocks directly
     # cleaned_blocks_by_plane = defaultdict(list)
     # for idx, fb in cleaned_blocks.iteritems():
     #     cleaned_blocks_by_plane[fb.indices[2]] += [fb]

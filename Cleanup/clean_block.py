@@ -32,7 +32,7 @@ input_probs = sys.argv[2]
 output_path = sys.argv[3]
 
 # Default settings
-minsegsize = 100
+minsegsize = 500
 
 repair_branches = False
 branch_min_overlap_ratio = 0.9
@@ -63,6 +63,9 @@ while repeat_attempt_i < job_repeat_attempts and not check_file(output_path):
         prob_vol = input_probs_hdf5['probabilities'][...]
         input_probs_hdf5.close()
 
+        if len(prob_vol.shape) == 4:
+            prob_vol = prob_vol[:,:,1,:]
+
         has_boundaries = np.any(label_vol==0)
 
         # Compress labels to 32 bit
@@ -86,7 +89,8 @@ while repeat_attempt_i < job_repeat_attempts and not check_file(output_path):
             if has_boundaries:
                 for image_i in range(packed_vol.shape[2]):
                     label_image = packed_vol[:,:,image_i]
-                    packed_vol[:,:,image_i] = mahotas.cwatershed(np.zeros(label_image.shape, dtype=np.uint32), label_image, return_lines=False)
+                    if not np.all(label_image == 0):
+                        packed_vol[:,:,image_i] = mahotas.cwatershed(np.zeros(label_image.shape, dtype=np.int32), label_image, return_lines=False)
 
             if Debug:
                 from libtiff import TIFF
@@ -299,9 +303,9 @@ while repeat_attempt_i < job_repeat_attempts and not check_file(output_path):
 
             clean_vol = None
 
-            # Restore boundary lines
             if has_boundaries:
                 clean_vol = inverse[remap_index[packed_vol]]
+                # Restore boundary lines
                 clean_vol[label_vol == 0] = 0
             else:
                 clean_vol = inverse[remap_index[packed_vol]-1]

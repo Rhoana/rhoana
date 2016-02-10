@@ -2,7 +2,8 @@ import os
 import sys
 import numpy as np
 import h5py
-from libtiff import TIFF
+# from libtiff import TIFF
+import mahotas
 import shutil
 
 job_repeat_attempts = 5
@@ -25,11 +26,12 @@ if __name__ == '__main__':
 
             # Parse arguments
             args = sys.argv[2:]
-            output_size = int(args.pop(0))
+            output_size_x = int(args.pop(0))
+            output_size_y = int(args.pop(0))
             zoffset = int(args.pop(0))
             xy_halo = int(args.pop(0))
 
-            output_image = np.zeros((output_size, output_size), np.uint32)
+            output_image = np.zeros((output_size_x, output_size_y), np.uint32)
             while args:
                 xbase = int(args.pop(0))
                 ybase = int(args.pop(0))
@@ -52,14 +54,14 @@ if __name__ == '__main__':
                 if xbase > 0:
                     xbase = xbase + xy_halo
                     xfrom_base = xfrom_base + xy_halo
-                if xend < output_size - 1:
+                if xend < output_size_x - 1:
                     xend = xend - xy_halo
                     xfrom_end = xfrom_end - xy_halo
 
                 if ybase > 0:
                     ybase = ybase + xy_halo
                     yfrom_base = yfrom_base + xy_halo
-                if yend < output_size - 1:
+                if yend < output_size_y - 1:
                     yend = yend - xy_halo
                     yfrom_end = yfrom_end - xy_halo
 
@@ -68,11 +70,31 @@ if __name__ == '__main__':
 
                 output_image[xbase:xend, ybase:yend] = data[xfrom_base:xfrom_end, yfrom_base:yfrom_end, zoffset]
 
-            tif = TIFF.open(output_path + '_partial', mode='w')
-            tif.write_image(np.rot90(output_image), compression='lzw')
-            tif.close()
+            temp_path = output_path.replace('.', '_partial.')
 
-            shutil.move(output_path + '_partial', output_path)
+            if output_path.lower().endswith('.tif') or output_path.lower().endswith('.tiff'):
+                # Output 32-bit tiff (difficult to open for most desktop applications)
+                tif = TIFF.open(temp_path, mode='w')
+                tif.write_image(np.rot90(output_image), compression='lzw')
+                tif.close()
+            else:
+                # Output in Vast PNG or other format
+                if np.max(output_image) < 2**24:
+                    vast_export = np.zeros((output_image.shape[0], output_image.shape[1], 3), dtype=np.uint8)
+                    vast_export[:,:,0] = np.uint8(output_image // (2**16) % (2**8))
+                    vast_export[:,:,1] = np.uint8(output_image // (2**8) % (2**8))
+                    vast_export[:,:,2] = np.uint8(output_image % (2**8))
+                    mahotas.imsave(temp_path, vast_export)
+                else:
+                    # Use alpha channel to export 32-bit labels
+                    vast_export = np.zeros((output_image.shape[0], output_image.shape[1], 4), dtype=np.uint8)
+                    vast_export[:,:,0] = np.uint8(output_image // (2**16) % (2**8))
+                    vast_export[:,:,1] = np.uint8(output_image // (2**8) % (2**8))
+                    vast_export[:,:,2] = np.uint8(output_image % (2**8))
+                    vast_export[:,:,3] = np.uint8(output_image // (2**24) % (2**8))
+                    mahotas.imsave(temp_path, vast_export)
+
+            shutil.move(temp_path, output_path)
             
         except IOError as e:
             print "I/O error({0}): {1}".format(e.errno, e.strerror)

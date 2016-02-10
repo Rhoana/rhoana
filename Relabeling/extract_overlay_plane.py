@@ -36,11 +36,12 @@ if __name__ == '__main__':
             # Parse arguments
             args = sys.argv[2:]
             input_image_path = args.pop(0)
-            output_size = int(args.pop(0))
+            output_size_x = int(args.pop(0))
+            output_size_y = int(args.pop(0))
             zoffset = int(args.pop(0))
             xy_halo = int(args.pop(0))
 
-            output_ids = np.zeros((output_size, output_size), np.uint32)
+            output_ids = np.zeros((output_size_x, output_size_y), np.uint32)
 
             while args:
                 xbase = int(args.pop(0))
@@ -64,14 +65,14 @@ if __name__ == '__main__':
                 if xbase > 0:
                     xbase = xbase + xy_halo
                     xfrom_base = xfrom_base + xy_halo
-                if xend < output_size - 1:
+                if xend < output_size_x - 1:
                     xend = xend - xy_halo
                     xfrom_end = xfrom_end - xy_halo
 
                 if ybase > 0:
                     ybase = ybase + xy_halo
                     yfrom_base = yfrom_base + xy_halo
-                if yend < output_size - 1:
+                if yend < output_size_y - 1:
                     yend = yend - xy_halo
                     yfrom_end = yfrom_end - xy_halo
 
@@ -82,19 +83,27 @@ if __name__ == '__main__':
 
             # Generate a random colormap (should be the same for all nodes)
             np.random.seed(7)
-            color_map = np.uint8(np.random.randint(0,256,(ncolors+1)*3)).reshape((ncolors + 1, 3))
+            color_map = np.uint8(np.random.randint(0,256,(ncolors)*3)).reshape((ncolors, 3))
             
+            # Optional - remove fusion boundaries (some boundaries are now redundant after block matching)
+            if np.any(output_ids==0):
+                output_ids = mahotas.cwatershed(np.zeros(output_ids.shape, dtype=np.int32), np.int32(output_ids))
+
             overlay_colors = color_map[output_ids % ncolors]
 
-            boundaries = output_ids==1
+            # Draw in region boundaries
+            # dx, dy = np.gradient(output_ids)
+            # boundaries = np.logical_or(dx!=0, dy!=0)
 
-            for ci in range(3):
-                overlay_colors[:,:,ci][boundaries] = 128
+            # for ci in range(3):
+            #     overlay_colors[:,:,ci][boundaries] = 64
 
-            current_image_f = np.float32(mahotas.imread(input_image_path)[:output_size, :output_size])
+            current_image_f = np.float32(mahotas.imread(input_image_path)[:output_size_x, :output_size_y])
             
             if len(current_image_f.shape) == 3:
                 current_image_f = current_image_f[:,:,0]
+            if current_image_f.shape[0] > overlay_colors.shape[0] or current_image_f.shape[1] > overlay_colors.shape[1]:
+                current_image_f = current_image_f[:overlay_colors.shape[0], :overlay_colors.shape[1]]
 
             overlay_colors[:,:,0] = (1-alpha) * overlay_colors[:,:,0] + alpha * current_image_f
             overlay_colors[:,:,1] = (1-alpha) * overlay_colors[:,:,1] + alpha * current_image_f

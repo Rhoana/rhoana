@@ -41,6 +41,8 @@ if __name__ == '__main__':
 
             # put every pair in the remap
             for v1, v2 in merges:
+                if v1 == 545460848106:
+                    print 'founditA'
                 remap.setdefault(v1, v1)
                 remap.setdefault(v2, v2)
                 while v1 != remap[v1]:
@@ -56,6 +58,8 @@ if __name__ == '__main__':
             # mapped to its final value in this loop).
             remap[0] = 0
             for v in sorted(remap.keys()):
+                if v == 545460848106:
+                    print 'founditB'
                 if v == 0:
                     continue
                 if remap[v] == v:
@@ -67,6 +71,8 @@ if __name__ == '__main__':
             # write to hdf5 - needs to be sorted for remap to use searchsorted()
             ds = outf.create_dataset('remap', (2, len(remap)), merges.dtype)
             for idx, v in enumerate(sorted(remap.keys())):
+                if v == 545460848106:
+                    print 'founditC'
                 ds[:, idx] = [v, remap[v]]
 
             outf.close()

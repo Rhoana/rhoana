@@ -14,7 +14,7 @@ def check_file(filename):
     f = h5py.File(filename, 'r')
     fkeys = f.keys()
     f.close()
-    if set(fkeys) != set(['merges']):
+    if set(fkeys) != set(['merges']) and set(fkeys) != set(['merges', 'scores']):
         os.unlink(filename)
         return False
     return True
@@ -32,6 +32,7 @@ if __name__ == '__main__':
             outf = h5py.File(output_path + '_partial', 'w')
 
             outmerges = np.zeros((0, 2), dtype=np.uint64)
+            outscores = np.zeros((0, 2), dtype=np.float32)
             for filename in sys.argv[1:-1]:
                 try:
                     print filename
@@ -39,18 +40,28 @@ if __name__ == '__main__':
                     assert ('merges' in f) or ('labels' in f)
                     if 'merges' in f:
                         outmerges = np.vstack((outmerges, f['merges'][...].astype(np.uint64)))
+                        if 'scores' in f:
+                            outscores = np.vstack((outscores, f['scores'][...].astype(np.float32)))
+                            print outmerges.shape
+                            print outscores.shape
+                        else:
+                            print "NO SCORES"
                     if 'labels' in f:
                         # write an identity map for the labels
                         labels = np.unique(f['labels'][...])
                         labels = labels[labels > 0]
                         labels = labels.reshape((-1, 1))
+                        scores = labels * 0.
                         outmerges = np.vstack((outmerges, np.hstack((labels, labels)).astype(np.uint64)))
+                        outscores = np.vstack((outscores, np.hstack((scores, scores)).astype(np.float32)))
                 except Exception, e:
                     print e, filename
                     raise
 
             if outmerges.shape[0] > 0:
                 outf.create_dataset('merges', outmerges.shape, outmerges.dtype)[...] = outmerges
+                if outscores.shape[0] > 0:
+                    outf.create_dataset('scores', outscores.shape, outscores.dtype)[...] = outscores
 
             outf.close()
 
