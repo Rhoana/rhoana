@@ -6,7 +6,7 @@ import numpy as np
 
 from rhoana.backends.storage import HDF5Storage
 
-class TestFetch(unittest.TestCase):
+class TestHDF5Backend(unittest.TestCase):
     def setUp(self):
         # Create a temporary directory
         self.test_dir = tempfile.mkdtemp()
@@ -27,8 +27,8 @@ class TestFetch(unittest.TestCase):
         randvals = np.random.uniform(0, 1, [2, 4, 4, 1]).astype(np.float32)
         ds = storage.new_dataset("tmp", randvals.shape, dtype=np.float32)
         ds[...] = randvals
+        self.assertEqual(ds.shape, randvals.shape)
         self.assertEqual(ds[...].shape, randvals.shape)
-        self.assertEqual((ds.depth, ds.width, ds.height, ds.channels), randvals.shape)
         self.assertTrue(np.all(ds[...] == randvals))
 
 if __name__ == '__main__':
